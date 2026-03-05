@@ -4,114 +4,98 @@ import {
   FileText,
   Ticket,
   ClipboardList,
-  Calendar,
-  FileCheck,
   MoreVertical,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import aksaraLogo from '@/assets/aksara-logo.png';
 import type { ChatSession } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 
 const mockSessions: ChatSession[] = [
-  { id: '1', title: 'HR Policy Inquiry', icon: 'document', category: 'recent', color: '#2A9D8F', updatedAt: new Date() },
-  { id: '2', title: 'IT Support Ticket #402', icon: 'ticket', category: 'recent', updatedAt: new Date() },
-  { id: '3', title: 'Medical Records Access', icon: 'document', category: 'recent', updatedAt: new Date() },
-  { id: '4', title: 'Shift Schedule', icon: 'schedule', category: 'tools', updatedAt: new Date() },
-  { id: '5', title: 'RSCM Protocols', icon: 'protocol', category: 'tools', updatedAt: new Date() },
+  { id: '1', title: 'HR Policy Inquiry', icon: 'document', category: 'tools', color: '#2A9D8F', updatedAt: new Date() },
+  { id: '2', title: 'IT Support Ticket #402', icon: 'ticket', category: 'tools', updatedAt: new Date() },
+  { id: '3', title: 'Medical Records Access', icon: 'medical', category: 'tools', updatedAt: new Date() },
 ];
 
 const iconMap = {
   document: FileText,
   ticket: Ticket,
   medical: ClipboardList,
-  schedule: Calendar,
-  protocol: FileCheck,
 };
 
 export function ChatSidebar() {
   const [activeId, setActiveId] = useState('1');
+  const [isExpanded, setIsExpanded] = useState(true);
   const { user, role, signOut } = useAuth();
 
-  const recentItems = mockSessions.filter((s) => s.category === 'recent');
   const toolItems = mockSessions.filter((s) => s.category === 'tools');
 
   return (
-    <aside className="w-[260px] min-w-[260px] bg-sidebar-bg border-r border-gray-200 text-gray-800 flex flex-col h-full">
-      {/* Logo */}
-      <div className="px-5 pt-5 pb-3">
-        <div className="flex items-center gap-2 mb-1">
+    <aside 
+      className={`bg-sidebar-bg border-r border-gray-200 text-gray-800 flex flex-col h-full transition-all duration-300 ${
+        isExpanded ? 'w-[260px] min-w-[260px]' : 'w-[72px] min-w-[72px]'
+      }`}
+    >
+      {/* Logo & Toggle */}
+      <div className={`px-4 pt-5 pb-3 flex items-center ${isExpanded ? 'justify-between' : 'justify-center'} relative`}>
+        <div className={`flex items-center gap-2 mb-1 ${!isExpanded && 'hidden'}`}>
           <img src={aksaraLogo} alt="AKSARA Logo" className="w-8 h-8 object-contain" />
           <div>
             <h1 className="text-lg font-bold tracking-wide text-primary">AKSARA</h1>
             <p className="text-[10px] text-gray-400 uppercase tracking-widest -mt-1">
-              Asisten Pencarian Sumber Data
+              Asisten
             </p>
           </div>
         </div>
+        {!isExpanded && (
+           <img src={aksaraLogo} alt="AKSARA Logo" className="w-8 h-8 object-contain mb-1" />
+        )}
+        <button 
+          onClick={() => setIsExpanded(!isExpanded)}
+          className={`p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors ${
+            !isExpanded && 'absolute -right-3 top-6 bg-white border border-gray-200 shadow-sm z-10'
+          }`}
+        >
+          {isExpanded ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-3 h-3" />}
+        </button>
       </div>
 
       {/* New Chat Button */}
-      <div className="px-4 mb-4">
-        <button className="w-full bg-primary hover:bg-primary-dark text-white py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors">
-          <Plus className="w-4 h-4" />
-          New Chat
+      <div className="px-3 mb-4 mt-2">
+        <button className={`bg-primary hover:bg-primary-dark text-white py-2.5 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors ${isExpanded ? 'w-full px-4' : 'w-12 h-12 mx-auto rounded-xl p-0'}`}>
+          <Plus className="w-5 h-5" />
+          {isExpanded && <span>New Chat</span>}
         </button>
       </div>
 
       {/* Sessions List */}
-      <div className="flex-1 overflow-y-auto px-2">
-        {/* Recent */}
-        <p className="text-[11px] text-gray-500 uppercase tracking-wider font-medium px-3 mb-2">
-          Recent Inquiries
-        </p>
-        <ul className="space-y-0.5 mb-5">
-          {recentItems.map((session) => {
-            const Icon = iconMap[session.icon];
-            const isActive = session.id === activeId;
-            return (
-              <li key={session.id}>
-                <button
-                  onClick={() => setActiveId(session.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
-                    isActive
-                      ? 'bg-sidebar-active text-primary font-medium'
-                      : 'text-gray-600 hover:bg-sidebar-hover'
-                  }`}
-                >
-                  {session.color && isActive ? (
-                    <div
-                      className="w-1 h-6 rounded-full mr-1"
-                      style={{ backgroundColor: session.color }}
-                    />
-                  ) : null}
-                  <Icon className="w-4 h-4 shrink-0 opacity-60" />
-                  <span className="truncate">{session.title}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-
+      <div className="flex-1 overflow-y-auto px-2 mt-2">
         {/* Tools */}
-        <p className="text-[11px] text-gray-500 uppercase tracking-wider font-medium px-3 mb-2">
-          Tools
-        </p>
+        {isExpanded && (
+          <p className="text-[11px] text-gray-500 uppercase tracking-wider font-medium px-3 mb-2">
+            Tools
+          </p>
+        )}
         <ul className="space-y-0.5">
           {toolItems.map((session) => {
-            const Icon = iconMap[session.icon];
+            const Icon = iconMap[session.icon as keyof typeof iconMap];
             const isActive = session.id === activeId;
             return (
               <li key={session.id}>
                 <button
                   onClick={() => setActiveId(session.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+                  title={!isExpanded ? session.title : undefined}
+                  className={`flex items-center gap-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+                    isExpanded ? 'w-full px-3' : 'w-10 h-10 mx-auto justify-center p-0'
+                  } ${
                     isActive
                       ? 'bg-sidebar-active text-primary font-medium'
                       : 'text-gray-600 hover:bg-sidebar-hover'
                   }`}
                 >
-                  <Icon className="w-4 h-4 shrink-0 opacity-60" />
-                  <span className="truncate">{session.title}</span>
+                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'opacity-100' : 'opacity-60'}`} />
+                  {isExpanded && <span className="truncate">{session.title}</span>}
                 </button>
               </li>
             );
@@ -120,19 +104,21 @@ export function ChatSidebar() {
       </div>
 
       {/* User Profile */}
-      <div className="p-4 border-t border-gray-100">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-400 to-cyan-600 flex items-center justify-center text-sm font-bold text-white uppercase">
+      <div className={`p-4 border-t border-gray-100 ${!isExpanded && 'flex justify-center flex-col items-center p-3'}`}>
+        <div className={`flex items-center ${isExpanded ? 'gap-3' : 'flex-col gap-2'}`}>
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-400 to-cyan-600 flex items-center justify-center text-sm font-bold text-white uppercase shrink-0">
             {user?.email?.charAt(0) || 'U'}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{user?.email || 'User'}</p>
-            <p className="text-xs text-gray-500 truncate capitalize">{role || 'User'}</p>
-          </div>
+          {isExpanded && (
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{user?.email || 'User'}</p>
+              <p className="text-xs text-gray-500 truncate capitalize">{role || 'User'}</p>
+            </div>
+          )}
           <button 
             onClick={() => signOut()}
             title="Sign Out"
-            className="text-gray-400 hover:text-red-500 transition-colors"
+            className={`text-gray-400 hover:text-red-500 transition-colors ${!isExpanded && 'mt-1 p-2 bg-gray-50 hover:bg-red-50 rounded-lg'}`}
           >
             <MoreVertical className="w-4 h-4" />
           </button>

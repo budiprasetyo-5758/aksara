@@ -94,7 +94,7 @@ export function ChatPage() {
   return (
     <div className="flex fixed inset-0 overflow-hidden bg-white">
       <ChatSidebar />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         <ChatArea messages={messages} />
         <ChatInput onSend={handleSend} />
       </div>

@@ -26,8 +26,8 @@ export interface BoundingBox {
 export interface ChatSession {
   id: string;
   title: string;
-  icon: 'document' | 'ticket' | 'medical' | 'schedule' | 'protocol';
-  category: 'recent' | 'tools';
+  icon: 'document' | 'ticket' | 'medical';
+  category: 'tools';
   color?: string;
   updatedAt: Date;
 }

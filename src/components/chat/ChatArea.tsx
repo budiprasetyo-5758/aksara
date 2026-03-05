@@ -16,7 +16,7 @@ export function ChatArea({ messages }: ChatAreaProps) {
   }, [messages]);
 
   return (
-    <div className="flex-1 flex flex-col min-w-0">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0">
       {/* Header Bar */}
       <header className="relative z-10 h-14 min-h-[56px] border-b border-gray-200 bg-white flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-3">
@@ -41,10 +41,10 @@ export function ChatArea({ messages }: ChatAreaProps) {
       </header>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto bg-chat-bg px-6 py-6">
+      <div className="flex-1 overflow-y-auto bg-white py-6">
         {/* Time Divider */}
         <div className="text-center mb-6">
-          <span className="text-xs text-gray-400 bg-chat-bg px-3">Today, 10:23 AM</span>
+          <span className="text-xs text-gray-400 bg-white px-3">Today, 10:23 AM</span>
         </div>
 
         {messages.map((message) => (
