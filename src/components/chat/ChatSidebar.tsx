@@ -9,6 +9,7 @@ import {
   MoreVertical,
 } from 'lucide-react';
 import type { ChatSession } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 const mockSessions: ChatSession[] = [
   { id: '1', title: 'HR Policy Inquiry', icon: 'document', category: 'recent', color: '#2A9D8F', updatedAt: new Date() },
@@ -28,6 +29,7 @@ const iconMap = {
 
 export function ChatSidebar() {
   const [activeId, setActiveId] = useState('1');
+  const { user, role, signOut } = useAuth();
 
   const recentItems = mockSessions.filter((s) => s.category === 'recent');
   const toolItems = mockSessions.filter((s) => s.category === 'tools');
@@ -121,14 +123,18 @@ export function ChatSidebar() {
       {/* User Profile */}
       <div className="p-4 border-t border-gray-100">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-400 to-cyan-600 flex items-center justify-center text-sm font-bold text-white">
-            AN
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-400 to-cyan-600 flex items-center justify-center text-sm font-bold text-white uppercase">
+            {user?.email?.charAt(0) || 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">Dr. Aris Nugraha</p>
-            <p className="text-xs text-gray-500 truncate">Resident - Cardiology</p>
+            <p className="text-sm font-medium truncate">{user?.email || 'User'}</p>
+            <p className="text-xs text-gray-500 truncate capitalize">{role || 'User'}</p>
           </div>
-          <button className="text-gray-400 hover:text-gray-800 transition-colors">
+          <button 
+            onClick={() => signOut()}
+            title="Sign Out"
+            className="text-gray-400 hover:text-red-500 transition-colors"
+          >
             <MoreVertical className="w-4 h-4" />
           </button>
         </div>

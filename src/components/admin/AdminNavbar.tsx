@@ -1,5 +1,6 @@
-import { Plus, Bell, Search, User } from 'lucide-react';
+import { Plus, Bell, Search, User, LogOut } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 const navLinks = [
   { label: 'Dashboard', path: '/admin' },
@@ -10,6 +11,7 @@ const navLinks = [
 
 export function AdminNavbar() {
   const location = useLocation();
+  const { signOut } = useAuth();
 
   return (
     <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
@@ -65,6 +67,13 @@ export function AdminNavbar() {
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center">
           <User className="w-4 h-4 text-white" />
         </div>
+        <button 
+          onClick={() => signOut()}
+          className="ml-2 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </button>
       </div>
     </header>
   );

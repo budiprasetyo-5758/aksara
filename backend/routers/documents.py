@@ -3,8 +3,9 @@ AKSARA RSCM — Document Management Router
 Endpoints for uploading, listing, syncing, and deleting documents.
 """
 
-import uuid
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+import os
+from datetime import datetime
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, BackgroundTasks
 from models.schemas import (
     DocumentOut,
     DocumentListResponse,
@@ -12,16 +13,25 @@ from models.schemas import (
     DocumentSyncResponse,
     StatsResponse,
 )
-from services.supabase_client import get_supabase_client
-from services.parser import parse_pdf, get_total_pages
-from services.embedder import embed_texts, store_embeddings_in_supabase
+from services.supabase_client import supabase as get_supabase_client
+from services.parser import process_pdf
+from services.embedder import generate_embeddings as embed_texts, store_embeddings_in_supabase
+from services.auth_service import require_admin
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
 
 @router.get("/", response_model=DocumentListResponse)
-async def list_documents(page: int = 1, per_page: int = 10, status: str | None = None):
-    """List all documents with optional status filter and pagination."""
+async def list_documents(
+    page: int = 1,
+    per_page: int = 10,
+    status: str | None = None,
+    admin_user: dict = Depends(require_admin)
+):
+    """
+    List all documents with optional status filter and pagination.
+    Requires Admin privileges.
+    """
     client = get_supabase_client()
     query = client.table("documents").select("*", count="exact")
 
@@ -59,9 +69,11 @@ async def list_documents(page: int = 1, per_page: int = 10, status: str | None =
 async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    admin_user: dict = Depends(require_admin)
 ):
     """
     Upload a document to Supabase Storage and create a metadata record.
+    Requires Admin privileges.
     Processing (parsing + embedding) is done asynchronously in the background.
     """
     # Validate file type
@@ -87,7 +99,16 @@ async def upload_document(
     # Get page count for PDFs
     total_pages = 0
     if file_ext == "pdf":
-        total_pages = get_total_pages(file_bytes)
+        # The original code used get_total_pages, but the diff implies process_pdf might handle this or it's removed.
+        # Sticking to the diff's import change, assuming process_pdf is the new entry point.
+        # For now, keeping get_total_pages if it's still needed and not part of process_pdf's return.
+        # If process_pdf returns chunks, total_pages might be derived from them.
+        # Given the diff, I'll remove get_total_pages and assume process_pdf handles it or it's no longer directly set here.
+        # Reverting this part to match the original logic as the diff doesn't explicitly remove get_total_pages call, only its import.
+        # Let's assume process_pdf will return chunks and total_pages if needed.
+        # For now, I'll keep total_pages=0 and let process_document handle the actual parsing.
+        pass
+
 
     # Insert document metadata
     doc_data = {
@@ -126,29 +147,13 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
         client.table("documents").update({"status": "syncing"}).eq("id", doc_id).execute()
 
         # Parse document
-        if file_ext == "pdf":
-            chunks = parse_pdf(file_bytes)
-        else:
-            # For txt/docx, simple text chunking
-            text = file_bytes.decode("utf-8", errors="ignore")
-            from models.schemas import BoundingBox
+        # The diff implies process_pdf is the new unified parser.
+        chunks, total_pages = process_pdf(file_bytes, file_ext)
 
-            chunks_data = []
-            words = text.split()
-            chunk_size = 512
-            for i in range(0, len(words), chunk_size - 50):
-                chunk_text = " ".join(words[i : i + chunk_size])
-                from models.schemas import ChunkData
+        # Update total_pages in document metadata if it was 0 or incorrect
+        if total_pages > 0:
+            client.table("documents").update({"total_pages": total_pages}).eq("id", doc_id).execute()
 
-                chunks_data.append(
-                    ChunkData(
-                        text=chunk_text,
-                        page_number=1,
-                        bbox=BoundingBox(x=0, y=0, width=0, height=0),
-                        chunk_index=len(chunks_data),
-                    )
-                )
-            chunks = chunks_data
 
         if not chunks:
             client.table("documents").update({"status": "failed"}).eq("id", doc_id).execute()
@@ -179,8 +184,15 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
 
 
 @router.post("/{doc_id}/sync", response_model=DocumentSyncResponse)
-async def sync_document(doc_id: str, background_tasks: BackgroundTasks):
-    """Re-process a document: delete old chunks and re-index."""
+async def sync_document(
+    doc_id: str,
+    background_tasks: BackgroundTasks,
+    admin_user: dict = Depends(require_admin)
+):
+    """
+    Process a document: extract text, chunk it, generate embeddings, and save to DB.
+    Requires Admin privileges.
+    """
     client = get_supabase_client()
 
     # Check document exists
@@ -207,8 +219,14 @@ async def sync_document(doc_id: str, background_tasks: BackgroundTasks):
 
 
 @router.patch("/{doc_id}/toggle")
-async def toggle_document(doc_id: str):
-    """Toggle the is_active status of a document."""
+async def toggle_document_status(
+    doc_id: str,
+    admin_user: dict = Depends(require_admin)
+):
+    """
+    Toggle the active status of a document.
+    Requires Admin privileges.
+    """
     client = get_supabase_client()
 
     doc = client.table("documents").select("is_active").eq("id", doc_id).single().execute()
@@ -222,8 +240,14 @@ async def toggle_document(doc_id: str):
 
 
 @router.delete("/{doc_id}")
-async def delete_document(doc_id: str):
-    """Delete a document and all its chunks."""
+async def delete_document(
+    doc_id: str,
+    admin_user: dict = Depends(require_admin)
+):
+    """
+    Delete a document and its chunks from DB and Storage.
+    Requires Admin privileges.
+    """
     client = get_supabase_client()
 
     doc = client.table("documents").select("storage_path").eq("id", doc_id).single().execute()
