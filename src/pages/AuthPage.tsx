@@ -1,17 +1,39 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { useNavigate, Navigate } from 'react-router-dom';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 import aksaraLogo from '@/assets/aksara-logo.png';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function AuthPage() {
+  const { session, isLoading } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [loginIdentifier, setLoginIdentifier] = useState(''); // email or username
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const navigate = useNavigate();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (session) {
+    return <Navigate to="/" replace />;
+  }
+
+  const validateUsername = (value: string): boolean => {
+    return /^[a-zA-Z0-9_]{3,30}$/.test(value);
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,21 +42,60 @@ export function AuthPage() {
 
     try {
       if (isLogin) {
+        // Login: support username or email
+        let loginEmail = loginIdentifier;
+
+        // If it doesn't look like an email, try to find email by username
+        if (!loginIdentifier.includes('@')) {
+          const { data: emailResult, error: rpcError } = await supabase
+            .rpc('get_email_by_username', { lookup_username: loginIdentifier.toLowerCase() });
+          
+          if (rpcError || !emailResult) {
+            throw new Error('Username not found. Please check and try again.');
+          }
+          loginEmail = emailResult;
+        }
+
         const { error } = await supabase.auth.signInWithPassword({
-          email,
+          email: loginEmail,
           password,
         });
         if (error) throw error;
         navigate('/');
       } else {
+        // Register
+        if (!fullName.trim()) {
+          throw new Error('Full name is required.');
+        }
+        if (!validateUsername(username)) {
+          throw new Error('Username must be 3-30 characters, only letters, numbers, and underscores.');
+        }
+
+        // Check if username is already taken
+        const { data: existing } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', username)
+          .single();
+        
+        if (existing) {
+          throw new Error('Username is already taken. Please choose another one.');
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              full_name: fullName.trim(),
+              username: username.trim().toLowerCase(),
+            },
+          },
         });
         if (error) throw error;
-        // Supabase might require email verification, but assuming auto-confirm for dev
         setError('Registration successful! You can now log in.');
         setIsLogin(true);
+        setLoginIdentifier(email);
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during authentication');
@@ -90,7 +151,7 @@ export function AuthPage() {
             </button>
           </div>
 
-          <form className="space-y-6" onSubmit={handleAuth}>
+          <form className="space-y-5" onSubmit={handleAuth}>
             {error && (
               <div
                 className={`p-4 rounded-lg text-sm ${
@@ -103,28 +164,73 @@ export function AuthPage() {
               </div>
             )}
 
+            {/* Register-only fields */}
+            {!isLogin && (
+              <>
+                <div>
+                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
+                    Full Name
+                  </label>
+                  <div className="mt-1">
+                    <input
+                      id="fullName"
+                      name="fullName"
+                      type="text"
+                      required
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="appearance-none block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                      placeholder="John Doe"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                    Username
+                  </label>
+                  <div className="mt-1">
+                    <input
+                      id="username"
+                      name="username"
+                      type="text"
+                      required
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      className="appearance-none block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                      placeholder="john_doe"
+                      maxLength={30}
+                    />
+                    <p className="mt-1 text-xs text-gray-400">Letters, numbers, and underscores only. 3-30 characters.</p>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Email / Username field */}
             <div>
               <label
                 htmlFor="email"
                 className="block text-sm font-medium text-gray-700"
               >
-                Email address
+                {isLogin ? 'Email or Username' : 'Email address'}
               </label>
               <div className="mt-1">
                 <input
                   id="email"
                   name="email"
-                  type="email"
-                  autoComplete="email"
+                  type={isLogin ? 'text' : 'email'}
+                  autoComplete={isLogin ? 'username' : 'email'}
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={isLogin ? loginIdentifier : email}
+                  onChange={(e) => isLogin ? setLoginIdentifier(e.target.value) : setEmail(e.target.value)}
                   className="appearance-none block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
-                  placeholder="doctor@hospital.com"
+                  placeholder={isLogin ? 'email@example.com or username' : 'email@example.com'}
                 />
               </div>
             </div>
 
+            {/* Password */}
             <div>
               <label
                 htmlFor="password"
@@ -132,18 +238,25 @@ export function AuthPage() {
               >
                 Password
               </label>
-              <div className="mt-1">
+              <div className="mt-1 relative">
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2.5 pr-10 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
                   placeholder="min. 6 characters"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 

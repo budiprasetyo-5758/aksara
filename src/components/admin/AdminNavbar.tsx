@@ -1,18 +1,14 @@
-import { Bell, Search, User, LogOut } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 import aksaraLogo from '@/assets/aksara-logo.png';
 
 const navLinks = [
-  { label: 'Dashboard', path: '/admin' },
-  { label: 'Documents', path: '/admin/documents' },
+  { label: 'Documents', path: '/admin' },
   { label: 'Users', path: '/admin/users' },
-  { label: 'Settings', path: '/admin/settings' },
 ];
 
 export function AdminNavbar() {
   const location = useLocation();
-  const { signOut } = useAuth();
 
   return (
     <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
@@ -27,8 +23,8 @@ export function AdminNavbar() {
         <nav className="flex items-center gap-1">
           {navLinks.map((link) => {
             const isActive =
-              link.path === '/admin/documents' ||
-              (link.path === '/admin' && location.pathname === '/admin');
+              (link.path === '/admin' && (location.pathname === '/admin' || location.pathname === '/admin/documents')) ||
+              (link.path !== '/admin' && location.pathname.startsWith(link.path));
             return (
               <Link
                 key={link.path}
@@ -49,30 +45,15 @@ export function AdminNavbar() {
         </nav>
       </div>
 
-      {/* Right: Search + Icons */}
+      {/* Right: Back to Chat */}
       <div className="flex items-center gap-3">
-        <div className="relative">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search documents..."
-            className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm w-52 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-          />
-        </div>
-        <button className="relative p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center">
-          <User className="w-4 h-4 text-white" />
-        </div>
-        <button 
-          onClick={() => signOut()}
-          className="ml-2 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+        <Link
+          to="/"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors border border-gray-200 hover:border-primary/30"
         >
-          <LogOut className="w-4 h-4" />
-          Sign Out
-        </button>
+          <ArrowLeft className="w-4 h-4" />
+          Back to Chat
+        </Link>
       </div>
     </header>
   );

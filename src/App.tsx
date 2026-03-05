@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ChatPage } from '@/pages/ChatPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { AuthPage } from '@/pages/AuthPage';
+import { ProfileSettings } from '@/pages/ProfileSettings';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 function ProtectedRoute({ 
@@ -26,7 +27,6 @@ function ProtectedRoute({
   }
 
   if (adminOnly && role !== 'admin') {
-    // Redirect non-admins trying to access admin pages to chat
     return <Navigate to="/" replace />;
   }
 
@@ -47,6 +47,15 @@ function App() {
                 <ChatPage />
               </ProtectedRoute>
             } 
+          />
+
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <ProfileSettings />
+              </ProtectedRoute>
+            }
           />
           
           <Route 

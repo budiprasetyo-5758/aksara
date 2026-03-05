@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Search,
 } from 'lucide-react';
 import type { Document, DocumentStatus } from '@/types';
 
@@ -42,6 +43,7 @@ function formatFileSize(bytes: number): string {
 export function DocumentTable() {
   const [documents, setDocuments] = useState(mockDocuments);
   const [currentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const toggleActive = (id: string) => {
     setDocuments((prev) =>
@@ -49,12 +51,26 @@ export function DocumentTable() {
     );
   };
 
+  const filteredDocuments = documents.filter((doc) =>
+    doc.file_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
       {/* Table Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
         <h3 className="text-base font-bold text-gray-800">Document List</h3>
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search documents..."
+              className="pl-9 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm w-48 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+            />
+          </div>
           <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
             <SlidersHorizontal className="w-4 h-4" />
           </button>
@@ -90,7 +106,7 @@ export function DocumentTable() {
           </tr>
         </thead>
         <tbody>
-          {documents.map((doc) => {
+          {filteredDocuments.map((doc) => {
             const fIcon = fileIcons[doc.file_type] || fileIcons.txt;
             const Icon = fIcon.icon;
             const status = statusConfig[doc.status];

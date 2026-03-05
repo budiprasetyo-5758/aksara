@@ -1,16 +1,21 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
-  MoreVertical,
   ChevronLeft,
   ChevronRight,
+  Settings,
+  LogOut,
 } from 'lucide-react';
 import aksaraLogo from '@/assets/aksara-logo.png';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function ChatSidebar() {
   const [isExpanded, setIsExpanded] = useState(true);
-  const { user, role, signOut } = useAuth();
+  const { user, role, profile, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const displayName = profile?.full_name || user?.email || 'User';
 
   return (
     <aside 
@@ -58,22 +63,35 @@ export function ChatSidebar() {
       {/* User Profile */}
       <div className={`p-4 border-t border-gray-100 ${!isExpanded && 'flex justify-center flex-col items-center p-3'}`}>
         <div className={`flex items-center ${isExpanded ? 'gap-3' : 'flex-col gap-2'}`}>
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-400 to-cyan-600 flex items-center justify-center text-sm font-bold text-white uppercase shrink-0">
-            {user?.email?.charAt(0) || 'U'}
-          </div>
+          <button
+            onClick={() => navigate('/settings')}
+            className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-400 to-cyan-600 flex items-center justify-center text-sm font-bold text-white uppercase shrink-0 hover:opacity-90 transition-opacity cursor-pointer"
+            title="Profile Settings"
+          >
+            {displayName.charAt(0)}
+          </button>
           {isExpanded && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{user?.email || 'User'}</p>
+              <p className="text-sm font-medium truncate">{displayName}</p>
               <p className="text-xs text-gray-500 truncate capitalize">{role || 'User'}</p>
             </div>
           )}
-          <button 
-            onClick={() => signOut()}
-            title="Sign Out"
-            className={`text-gray-400 hover:text-red-500 transition-colors ${!isExpanded && 'mt-1 p-2 bg-gray-50 hover:bg-red-50 rounded-lg'}`}
-          >
-            <MoreVertical className="w-4 h-4" />
-          </button>
+          <div className={`flex items-center gap-1 ${!isExpanded && 'flex-col mt-1'}`}>
+            <button 
+              onClick={() => navigate('/settings')}
+              title="Profile Settings"
+              className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-md transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => signOut()}
+              title="Sign Out"
+              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </aside>
