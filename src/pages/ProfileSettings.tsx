@@ -150,10 +150,6 @@ export function ProfileSettings() {
               <label className="block text-sm font-medium text-gray-400 mb-1">Email</label>
               <p className="text-sm text-gray-600">{user?.email || '-'}</p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Role</label>
-              <p className="text-sm text-gray-600 capitalize">{profile?.role || 'user'}</p>
-            </div>
           </div>
 
           {/* Save */}
