@@ -1,7 +1,8 @@
 import { useRef, useEffect } from 'react';
-import { Plus, Bell, Settings, HelpCircle } from 'lucide-react';
+import { Bell, Settings, HelpCircle } from 'lucide-react';
 import { MessageBubble } from './MessageBubble';
 import type { Message } from '@/types';
+import aksaraLogo from '@/assets/aksara-logo.png';
 
 interface ChatAreaProps {
   messages: Message[];
@@ -17,12 +18,10 @@ export function ChatArea({ messages }: ChatAreaProps) {
   return (
     <div className="flex-1 flex flex-col min-w-0">
       {/* Header Bar */}
-      <header className="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-6 shrink-0">
+      <header className="relative z-10 h-14 min-h-[56px] border-b border-gray-200 bg-white flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
-            <Plus className="w-4 h-4 text-white" />
-          </div>
-          <h2 className="text-lg font-bold text-gray-800">AKSARA Chat</h2>
+          <img src={aksaraLogo} alt="AKSARA Logo" className="w-7 h-7 object-contain" />
+          <h2 className="text-lg font-bold text-primary">AKSARA Chat</h2>
           <span className="text-[10px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full uppercase tracking-wider">
             Beta
           </span>

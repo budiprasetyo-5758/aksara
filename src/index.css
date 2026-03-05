@@ -18,12 +18,15 @@
   --color-success: #7BC043;
   --color-muted: #6B7280;
   --color-border: #E5E7EB;
-  --font-sans: 'Inter', sans-serif;
+  --font-sans: 'Poppins', sans-serif;
 }
 
 @layer base {
   * {
     @apply border-border;
+  }
+  html, body, #root {
+    @apply h-full w-full m-0 p-0;
   }
   body {
     @apply bg-white text-gray-900 antialiased;

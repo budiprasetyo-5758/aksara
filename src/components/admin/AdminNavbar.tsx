@@ -1,6 +1,7 @@
-import { Plus, Bell, Search, User, LogOut } from 'lucide-react';
+import { Bell, Search, User, LogOut } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import aksaraLogo from '@/assets/aksara-logo.png';
 
 const navLinks = [
   { label: 'Dashboard', path: '/admin' },
@@ -18,10 +19,8 @@ export function AdminNavbar() {
       {/* Left: Logo + Nav */}
       <div className="flex items-center gap-8">
         <Link to="/admin" className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
-            <Plus className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-lg font-bold text-gray-800">
+          <img src={aksaraLogo} alt="AKSARA Logo" className="w-7 h-7 object-contain" />
+          <span className="text-lg font-bold text-primary">
             AKSARA<sub className="text-[10px] text-gray-400 font-normal ml-0.5">admin</sub>
           </span>
         </Link>

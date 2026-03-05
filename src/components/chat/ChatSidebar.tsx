@@ -8,6 +8,7 @@ import {
   FileCheck,
   MoreVertical,
 } from 'lucide-react';
+import aksaraLogo from '@/assets/aksara-logo.png';
 import type { ChatSession } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -35,15 +36,13 @@ export function ChatSidebar() {
   const toolItems = mockSessions.filter((s) => s.category === 'tools');
 
   return (
-    <aside className="w-[260px] min-w-[260px] bg-sidebar-bg border-r border-gray-200 text-gray-800 flex flex-col h-screen">
+    <aside className="w-[260px] min-w-[260px] bg-sidebar-bg border-r border-gray-200 text-gray-800 flex flex-col h-full">
       {/* Logo */}
       <div className="px-5 pt-5 pb-3">
         <div className="flex items-center gap-2 mb-1">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Plus className="w-5 h-5 text-white" />
-          </div>
+          <img src={aksaraLogo} alt="AKSARA Logo" className="w-8 h-8 object-contain" />
           <div>
-            <h1 className="text-lg font-bold tracking-wide">AKSARA</h1>
+            <h1 className="text-lg font-bold tracking-wide text-primary">AKSARA</h1>
             <p className="text-[10px] text-gray-400 uppercase tracking-widest -mt-1">
               Asisten Pencarian Sumber Data
             </p>
