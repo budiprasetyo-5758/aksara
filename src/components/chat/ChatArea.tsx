@@ -1,15 +1,20 @@
 import { useRef, useEffect } from 'react';
-import { Bell, Settings, HelpCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Shield } from 'lucide-react';
 import { MessageBubble } from './MessageBubble';
+import { ChatInput } from './ChatInput';
 import type { Message } from '@/types';
 import aksaraLogo from '@/assets/aksara-logo.png';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ChatAreaProps {
   messages: Message[];
+  onSend: (message: string) => void;
 }
 
-export function ChatArea({ messages }: ChatAreaProps) {
+export function ChatArea({ messages, onSend }: ChatAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const { role } = useAuth();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -21,23 +26,20 @@ export function ChatArea({ messages }: ChatAreaProps) {
       <header className="relative z-10 h-14 min-h-[56px] border-b border-gray-200 bg-white flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-3">
           <img src={aksaraLogo} alt="AKSARA Logo" className="w-7 h-7 object-contain" />
-          <h2 className="text-lg font-bold text-primary">AKSARA Chat</h2>
-          <span className="text-[10px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full uppercase tracking-wider">
-            Beta
-          </span>
+          <h2 className="text-lg font-bold text-primary">AKSARA</h2>
         </div>
-        <div className="flex items-center gap-1">
-          <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
-          <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100">
-            <Settings className="w-5 h-5" />
-          </button>
-          <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100">
-            <HelpCircle className="w-5 h-5" />
-          </button>
-        </div>
+        
+        {role === 'admin' && (
+          <div className="flex items-center gap-2">
+            <Link 
+              to="/admin"
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+            >
+              <Shield className="w-4 h-4 text-primary" />
+              <span className="hidden sm:inline">Admin Dashboard</span>
+            </Link>
+          </div>
+        )}
       </header>
 
       {/* Messages Area */}
@@ -50,7 +52,16 @@ export function ChatArea({ messages }: ChatAreaProps) {
         {messages.map((message) => (
           <MessageBubble key={message.id} message={message} />
         ))}
+        {/* Spacer to prevent input from hiding the last message */}
+        <div className="h-24 shrink-0" />
         <div ref={bottomRef} />
+      </div>
+
+      {/* Floating Input Area */}
+      <div className="absolute bottom-6 left-0 right-0 px-6 pointer-events-none flex justify-center">
+        <div className="max-w-3xl w-full pointer-events-auto">
+          <ChatInput onSend={onSend} />
+        </div>
       </div>
     </div>
   );

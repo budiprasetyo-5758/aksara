@@ -27,7 +27,7 @@ const statusConfig: Record<DocumentStatus, { label: string; dot: string; text: s
 };
 
 const mockDocuments: Document[] = [
-  { id: '1', file_name: 'RSCM_SOP_Emergency_2023.pdf', file_path: '', file_size: 2516582, file_type: 'pdf', upload_date: 'Oct 24, 2023', status: 'indexed', is_active: true, total_pages: 48, storage_path: '', created_at: '', updated_at: '' },
+  { id: '1', file_name: 'SOP_Emergency_2023.pdf', file_path: '', file_size: 2516582, file_type: 'pdf', upload_date: 'Oct 24, 2023', status: 'indexed', is_active: true, total_pages: 48, storage_path: '', created_at: '', updated_at: '' },
   { id: '2', file_name: 'Helpdesk_Guidelines_v1.docx', file_path: '', file_size: 865280, file_type: 'docx', upload_date: 'Oct 22, 2023', status: 'syncing', is_active: true, total_pages: 15, storage_path: '', created_at: '', updated_at: '' },
   { id: '3', file_name: 'raw_data_dump_patient_info.txt', file_path: '', file_size: 12288, file_type: 'txt', upload_date: 'Oct 20, 2023', status: 'failed', is_active: false, total_pages: 1, storage_path: '', created_at: '', updated_at: '' },
   { id: '4', file_name: 'Insurance_Claim_Process_2024.pdf', file_path: '', file_size: 5347737, file_type: 'pdf', upload_date: 'Oct 18, 2023', status: 'indexed', is_active: true, total_pages: 82, storage_path: '', created_at: '', updated_at: '' },

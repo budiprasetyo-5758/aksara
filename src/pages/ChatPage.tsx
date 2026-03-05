@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatArea } from '@/components/chat/ChatArea';
-import { ChatInput } from '@/components/chat/ChatInput';
 import type { Message } from '@/types';
 
 const initialMessages: Message[] = [
@@ -14,7 +13,7 @@ const initialMessages: Message[] = [
   {
     id: '2',
     role: 'assistant',
-    content: `To request access to the patient database for a new resident, please follow these steps defined in the RSCM IT Policy:
+    content: `To request access to the patient database for a new resident, please follow these steps defined in the IT Policy:
 
 1. Log in to the **Intranet Portal**.
 2. Navigate to the **IT Services** section.
@@ -26,7 +25,7 @@ const initialMessages: Message[] = [
     sources: [
       {
         document_id: '1',
-        file_name: 'RSCM_IT_Policy.pdf',
+        file_name: 'IT_Policy.pdf',
         page_number: 12,
         bbox: { x: 0, y: 0, width: 100, height: 50 },
         snippet: 'System Access Request Form...',
@@ -83,7 +82,7 @@ export function ChatPage() {
             id: (Date.now() + 2).toString(),
             role: 'assistant',
             content:
-              'Berikut adalah tautan langsung ke **System Access Request Form**:\n\n[https://intranet.rscm.co.id/it-services/access-request](https://intranet.rscm.co.id/it-services/access-request)\n\nSilakan login terlebih dahulu dengan kredensial RSCM Anda sebelum mengakses formulir tersebut.',
+              'Berikut adalah tautan langsung ke **System Access Request Form**:\n\n[https://intranet.hospital.com/it-services/access-request](https://intranet.hospital.com/it-services/access-request)\n\nSilakan login terlebih dahulu dengan kredensial Anda sebelum mengakses formulir tersebut.',
             timestamp: new Date(),
           },
         ];
@@ -94,9 +93,8 @@ export function ChatPage() {
   return (
     <div className="flex fixed inset-0 overflow-hidden bg-white">
       <ChatSidebar />
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        <ChatArea messages={messages} />
-        <ChatInput onSend={handleSend} />
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+        <ChatArea messages={messages} onSend={handleSend} />
       </div>
     </div>
   );

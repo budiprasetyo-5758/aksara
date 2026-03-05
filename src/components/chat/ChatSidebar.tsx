@@ -1,35 +1,16 @@
 import { useState } from 'react';
 import {
   Plus,
-  FileText,
-  Ticket,
-  ClipboardList,
   MoreVertical,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
 import aksaraLogo from '@/assets/aksara-logo.png';
-import type { ChatSession } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 
-const mockSessions: ChatSession[] = [
-  { id: '1', title: 'HR Policy Inquiry', icon: 'document', category: 'tools', color: '#2A9D8F', updatedAt: new Date() },
-  { id: '2', title: 'IT Support Ticket #402', icon: 'ticket', category: 'tools', updatedAt: new Date() },
-  { id: '3', title: 'Medical Records Access', icon: 'medical', category: 'tools', updatedAt: new Date() },
-];
-
-const iconMap = {
-  document: FileText,
-  ticket: Ticket,
-  medical: ClipboardList,
-};
-
 export function ChatSidebar() {
-  const [activeId, setActiveId] = useState('1');
   const [isExpanded, setIsExpanded] = useState(true);
   const { user, role, signOut } = useAuth();
-
-  const toolItems = mockSessions.filter((s) => s.category === 'tools');
 
   return (
     <aside 
@@ -44,7 +25,7 @@ export function ChatSidebar() {
           <div>
             <h1 className="text-lg font-bold tracking-wide text-primary">AKSARA</h1>
             <p className="text-[10px] text-gray-400 uppercase tracking-widest -mt-1">
-              Asisten
+              Asisten Pencarian Sumber Data
             </p>
           </div>
         </div>
@@ -71,36 +52,7 @@ export function ChatSidebar() {
 
       {/* Sessions List */}
       <div className="flex-1 overflow-y-auto px-2 mt-2">
-        {/* Tools */}
-        {isExpanded && (
-          <p className="text-[11px] text-gray-500 uppercase tracking-wider font-medium px-3 mb-2">
-            Tools
-          </p>
-        )}
-        <ul className="space-y-0.5">
-          {toolItems.map((session) => {
-            const Icon = iconMap[session.icon as keyof typeof iconMap];
-            const isActive = session.id === activeId;
-            return (
-              <li key={session.id}>
-                <button
-                  onClick={() => setActiveId(session.id)}
-                  title={!isExpanded ? session.title : undefined}
-                  className={`flex items-center gap-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
-                    isExpanded ? 'w-full px-3' : 'w-10 h-10 mx-auto justify-center p-0'
-                  } ${
-                    isActive
-                      ? 'bg-sidebar-active text-primary font-medium'
-                      : 'text-gray-600 hover:bg-sidebar-hover'
-                  }`}
-                >
-                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'opacity-100' : 'opacity-60'}`} />
-                  {isExpanded && <span className="truncate">{session.title}</span>}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        {/* Intentionally left blank for future session list */}
       </div>
 
       {/* User Profile */}

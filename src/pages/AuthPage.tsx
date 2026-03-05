@@ -50,7 +50,7 @@ export function AuthPage() {
           <img src={aksaraLogo} alt="AKSARA Logo" className="w-16 h-16 object-contain" />
         </div>
         <h2 className="mt-6 text-center text-3xl font-bold text-primary">
-          AKSARA RSCM
+          AKSARA
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600 uppercase tracking-widest font-medium">
           Asisten Pencarian Sumber Data
@@ -120,7 +120,7 @@ export function AuthPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="appearance-none block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
-                  placeholder="doctor@rscm.co.id"
+                  placeholder="doctor@hospital.com"
                 />
               </div>
             </div>

@@ -18,11 +18,11 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   };
 
   return (
-    <div className="border-t border-gray-200 bg-white px-6 py-4 shrink-0">
-      <form onSubmit={handleSubmit} className="flex items-center gap-3">
+    <div className="bg-white/80 backdrop-blur-md border border-gray-200 shadow-lg rounded-2xl p-3">
+      <form onSubmit={handleSubmit} className="flex items-center gap-3 relative">
         <button
           type="button"
-          className="text-gray-400 hover:text-primary transition-colors shrink-0"
+          className="text-gray-400 hover:text-primary transition-colors shrink-0 ml-2"
         >
           <Paperclip className="w-5 h-5" />
         </button>
@@ -32,7 +32,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           onChange={(e) => setValue(e.target.value)}
           placeholder="Type your question here..."
           disabled={disabled}
-          className="flex-1 bg-gray-50 border border-gray-200 rounded-full px-5 py-3 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all disabled:opacity-50"
+          className="flex-1 bg-transparent border-0 px-2 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-0 transition-all disabled:opacity-50"
         />
         <button
           type="submit"
@@ -42,8 +42,8 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           <Send className="w-4 h-4" />
         </button>
       </form>
-      <p className="text-center text-[11px] text-gray-400 mt-2">
-        AKSARA may produce inaccurate information about people, places, or facts. Always verify with RSCM protocols.
+      <p className="text-center text-[10px] text-gray-400 mt-2 px-4">
+        AKSARA may produce inaccurate information about people, places, or facts. Always verify with internal protocols.
       </p>
     </div>
   );

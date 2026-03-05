@@ -23,7 +23,7 @@ export function AdminPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-1">Document Management</h1>
             <p className="text-sm text-gray-500 max-w-lg">
-              Manage and query internal documents for RSCM Helpdesk. Ensure your RAG system is
+              Manage and query internal documents for your Helpdesk. Ensure your RAG system is
               up-to-date with the latest knowledge base.
             </p>
           </div>
