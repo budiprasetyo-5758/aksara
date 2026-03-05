@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #2A9D8F;
+  --color-primary-dark: #1F7A6E;
+  --color-primary-light: #3DB8A9;
+  --color-accent: #E9C46A;
+  --color-sidebar-bg: #1A2332;
+  --color-sidebar-hover: #243447;
+  --color-sidebar-active: #2A3F55;
+  --color-chat-bg: #F5F7FA;
+  --color-user-msg: #2A9D8F;
+  --color-bot-msg: #FFFFFF;
+  --color-danger: #E76F51;
+  --color-warning: #F4A261;
+  --color-success: #2A9D8F;
+  --color-muted: #6B7280;
+  --color-border: #E5E7EB;
+  --font-sans: 'Inter', sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-white text-gray-900 antialiased;
+    font-family: var(--font-sans);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Markdown content styling */
+.markdown-content h1 { @apply text-xl font-bold mb-2; }
+.markdown-content h2 { @apply text-lg font-bold mb-2; }
+.markdown-content h3 { @apply text-base font-semibold mb-1; }
+.markdown-content p { @apply mb-2 leading-relaxed; }
+.markdown-content ol { @apply list-decimal pl-6 mb-2 space-y-1; }
+.markdown-content ul { @apply list-disc pl-6 mb-2 space-y-1; }
+.markdown-content li { @apply leading-relaxed; }
+.markdown-content strong { @apply font-bold; }
+.markdown-content em { @apply italic; }
+.markdown-content blockquote {
+  @apply border-l-4 border-primary/40 pl-4 py-1 my-2 italic text-gray-600 bg-primary/5 rounded-r;
+}
+.markdown-content code {
+  @apply bg-gray-100 px-1.5 py-0.5 rounded text-sm font-mono;
+}
+.markdown-content pre {
+  @apply bg-gray-800 text-gray-100 p-4 rounded-lg overflow-x-auto mb-3;
+}
+.markdown-content pre code {
+  @apply bg-transparent p-0 text-gray-100;
+}
+
+/* Typing animation */
+@keyframes blink {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+.typing-dots span {
+  animation: blink 1.4s infinite both;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }

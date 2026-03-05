@@ -1,0 +1,23 @@
+# AKSARA RSCM — FastAPI Backend
+# Core dependencies
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.19
+
+# Supabase
+supabase==2.11.0
+
+# Document Processing
+PyMuPDF==1.25.3
+
+# AI / ML
+sentence-transformers==3.4.1
+transformers==4.48.2
+torch>=2.0.0
+huggingface-hub==0.27.1
+
+# Utilities
+python-dotenv==1.0.1
+pydantic==2.10.5
+pydantic-settings==2.7.1
+numpy>=1.24.0
