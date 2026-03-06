@@ -97,11 +97,50 @@ export function ChatPage() {
     }, 2000);
   };
 
+  const handleRegenerate = (messageId: string) => {
+    setMessages((prev) => {
+      // Find the assistant message to regenerate
+      const msgIndex = prev.findIndex((m) => m.id === messageId);
+      if (msgIndex === -1) return prev;
+
+      // Replace it with a loading message
+      const loadingMessage: Message = {
+        id: messageId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        isLoading: true,
+      };
+
+      const updated = [...prev];
+      updated[msgIndex] = loadingMessage;
+      return updated;
+    });
+
+    // Simulate regenerated response
+    setTimeout(() => {
+      setMessages((prev) => {
+        const updated = prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                content:
+                  'Berikut adalah tautan langsung ke **System Access Request Form**:\n\n[https://intranet.hospital.com/it-services/access-request](https://intranet.hospital.com/it-services/access-request)\n\nSilakan login terlebih dahulu dengan kredensial Anda sebelum mengakses formulir tersebut.',
+                isLoading: false,
+                timestamp: new Date(),
+              }
+            : m
+        );
+        return updated;
+      });
+    }, 2000);
+  };
+
   return (
     <div className="flex fixed inset-0 overflow-hidden bg-white">
       <ChatSidebar />
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
-        <ChatArea messages={messages} onSend={handleSend} />
+        <ChatArea messages={messages} onSend={handleSend} onRegenerate={handleRegenerate} />
       </div>
     </div>
   );

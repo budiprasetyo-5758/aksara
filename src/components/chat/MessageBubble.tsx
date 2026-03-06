@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ThumbsUp, ThumbsDown, BookOpen } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, BookOpen, RefreshCw, Copy, Share2, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, SourceReference } from '@/types';
@@ -9,10 +9,38 @@ import { PdfPreviewModal } from './PdfPreviewModal';
 
 interface MessageBubbleProps {
   message: Message;
+  onRegenerate?: () => void;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
   const [previewSource, setPreviewSource] = useState<SourceReference | null>(null);
+  const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback: do nothing
+    }
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ text: message.content });
+      } catch {
+        // user cancelled
+      }
+    } else {
+      await navigator.clipboard.writeText(message.content);
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
+    }
+  };
 
   if (message.isLoading) {
     return (
@@ -37,15 +65,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   if (message.role === 'user') {
     return (
       <div className="w-full mb-8">
-        <div className="max-w-3xl mx-auto flex items-start gap-4 px-4">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center shrink-0 text-xs font-bold text-white shadow-sm mt-1">
-            AN
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-gray-700 mb-1 uppercase tracking-wider">You</p>
-            <div className="text-gray-800 text-base leading-relaxed break-words">
+        <div className="max-w-3xl mx-auto flex items-start justify-end gap-3 px-4">
+          <div className="max-w-[75%] min-w-0">
+            <p className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider text-right">You</p>
+            <div className="bg-primary/10 border border-primary/20 rounded-2xl rounded-tr-sm px-4 py-3 text-gray-800 text-base leading-relaxed break-words">
               {message.content}
             </div>
+          </div>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center shrink-0 text-xs font-bold text-white shadow-sm mt-5">
+            AN
           </div>
         </div>
       </div>
@@ -86,13 +114,70 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             </div>
           )}
 
-          {/* Feedback */}
-          <div className="flex items-center gap-2 mt-3 -ml-1">
-            <button className="p-1 text-gray-400 hover:text-primary transition-colors rounded">
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1 mt-3 -ml-1">
+            {/* Like */}
+            <button
+              title="Suka"
+              onClick={() => setFeedback(feedback === 'like' ? null : 'like')}
+              className={`group relative p-1.5 rounded-md transition-colors ${
+                feedback === 'like'
+                  ? 'text-emerald-500 bg-emerald-50'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`}
+            >
               <ThumbsUp className="w-4 h-4" />
             </button>
-            <button className="p-1 text-gray-400 hover:text-danger transition-colors rounded">
+
+            {/* Dislike */}
+            <button
+              title="Tidak suka"
+              onClick={() => setFeedback(feedback === 'dislike' ? null : 'dislike')}
+              className={`group relative p-1.5 rounded-md transition-colors ${
+                feedback === 'dislike'
+                  ? 'text-red-500 bg-red-50'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`}
+            >
               <ThumbsDown className="w-4 h-4" />
+            </button>
+
+            {/* Divider */}
+            <div className="w-px h-4 bg-gray-200 mx-0.5" />
+
+            {/* Regenerate */}
+            <button
+              title="Generate ulang"
+              onClick={onRegenerate}
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors rounded-md"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+
+            {/* Copy */}
+            <button
+              title={copied ? 'Tersalin!' : 'Salin jawaban'}
+              onClick={handleCopy}
+              className={`p-1.5 rounded-md transition-colors ${
+                copied
+                  ? 'text-emerald-500 bg-emerald-50'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            </button>
+
+            {/* Share */}
+            <button
+              title={shared ? 'Link disalin!' : 'Bagikan'}
+              onClick={handleShare}
+              className={`p-1.5 rounded-md transition-colors ${
+                shared
+                  ? 'text-emerald-500 bg-emerald-50'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {shared ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
             </button>
           </div>
         </div>

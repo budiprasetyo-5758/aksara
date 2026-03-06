@@ -10,9 +10,10 @@ import { useAuth } from '@/contexts/AuthContext';
 interface ChatAreaProps {
   messages: Message[];
   onSend: (message: string) => void;
+  onRegenerate?: (messageId: string) => void;
 }
 
-export function ChatArea({ messages, onSend }: ChatAreaProps) {
+export function ChatArea({ messages, onSend, onRegenerate }: ChatAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { role } = useAuth();
 
@@ -50,7 +51,11 @@ export function ChatArea({ messages, onSend }: ChatAreaProps) {
         </div>
 
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble
+            key={message.id}
+            message={message}
+            onRegenerate={message.role === 'assistant' && onRegenerate ? () => onRegenerate(message.id) : undefined}
+          />
         ))}
         {/* Spacer to prevent input from hiding the last message */}
         <div className="h-24 shrink-0" />
