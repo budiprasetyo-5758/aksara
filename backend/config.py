@@ -9,7 +9,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # ── Supabase ────────────────────────────────────────
     SUPABASE_URL: str = ""
-    SUPABASE_SERVICE_KEY: str = ""  # Use service-role key for server-side access
+    SUPABASE_SERVICE_KEY: str = ""           # Legacy alias
+    SUPABASE_ANON_KEY: str = ""              # Public anon key (for JWT verification)
+    SUPABASE_SERVICE_ROLE_KEY: str = ""       # Service role key (bypasses RLS)
 
     # ── Model Paths / HuggingFace ──────────────────────
     EMBEDDING_MODEL: str = "BAAI/bge-m3"
@@ -28,6 +30,11 @@ class Settings(BaseSettings):
 
     # ── CORS ───────────────────────────────────────────
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+
+    @property
+    def effective_service_key(self) -> str:
+        """Return the best available service key for server-side operations."""
+        return self.SUPABASE_SERVICE_ROLE_KEY or self.SUPABASE_SERVICE_KEY
 
     class Config:
         env_file = ".env"

@@ -1,12 +1,21 @@
 import { useState, useRef, type DragEvent, type ChangeEvent } from 'react';
-import { Upload, FileText } from 'lucide-react';
-import type { UploadProgress } from '@/types';
+import { Upload, FileText, CheckCircle2, XCircle } from 'lucide-react';
+import { uploadDocument } from '@/lib/api';
 
-export function UploadZone() {
+interface UploadStatus {
+  fileName: string;
+  progress: number;
+  status: 'uploading' | 'processing' | 'done' | 'error';
+  message: string;
+}
+
+interface UploadZoneProps {
+  onUploadComplete?: () => void;
+}
+
+export function UploadZone({ onUploadComplete }: UploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const [uploads, setUploads] = useState<UploadProgress[]>([
-    { fileName: 'knowledge_base_v2.pdf', progress: 45, status: 'Processing vectors...' },
-  ]);
+  const [uploads, setUploads] = useState<UploadStatus[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: DragEvent) => {
@@ -23,21 +32,59 @@ export function UploadZone() {
     e.preventDefault();
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
-    simulateUpload(files);
+    handleUpload(files);
   };
 
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    simulateUpload(files);
+    handleUpload(files);
+    // Reset input so the same file can be selected again
+    if (inputRef.current) inputRef.current.value = '';
   };
 
-  const simulateUpload = (files: File[]) => {
-    const newUploads: UploadProgress[] = files.map((f) => ({
-      fileName: f.name,
-      progress: 0,
-      status: 'Uploading...',
-    }));
-    setUploads((prev) => [...prev, ...newUploads]);
+  const handleUpload = async (files: File[]) => {
+    for (const file of files) {
+      const uploadIndex = uploads.length + files.indexOf(file);
+
+      // Add to upload list
+      setUploads((prev) => [
+        ...prev,
+        { fileName: file.name, progress: 30, status: 'uploading', message: 'Uploading...' },
+      ]);
+
+      try {
+        // Update to processing
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.fileName === file.name && u.status === 'uploading'
+              ? { ...u, progress: 60, status: 'processing', message: 'Processing & indexing...' }
+              : u
+          )
+        );
+
+        const result = await uploadDocument(file);
+
+        // Mark as done
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.fileName === file.name && u.status === 'processing'
+              ? { ...u, progress: 100, status: 'done', message: result.message }
+              : u
+          )
+        );
+
+        // Notify parent to refresh document list
+        onUploadComplete?.();
+      } catch (err: any) {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.fileName === file.name && (u.status === 'uploading' || u.status === 'processing')
+              ? { ...u, progress: 0, status: 'error', message: err.message || 'Upload failed.' }
+              : u
+          )
+        );
+      }
+    }
   };
 
   return (
@@ -76,27 +123,43 @@ export function UploadZone() {
       {/* Upload Progress */}
       {uploads.map((upload, i) => (
         <div
-          key={i}
+          key={`${upload.fileName}-${i}`}
           className="mt-4 bg-white border border-gray-200 rounded-xl px-5 py-4"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center">
-                <FileText className="w-4 h-4 text-red-500" />
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                upload.status === 'error' ? 'bg-red-50' : upload.status === 'done' ? 'bg-emerald-50' : 'bg-red-50'
+              }`}>
+                {upload.status === 'done' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                ) : upload.status === 'error' ? (
+                  <XCircle className="w-4 h-4 text-red-500" />
+                ) : (
+                  <FileText className="w-4 h-4 text-red-500" />
+                )}
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-800">{upload.fileName}</p>
-                <p className="text-xs text-gray-400">{upload.status}</p>
+                <p className={`text-xs ${upload.status === 'error' ? 'text-red-500' : 'text-gray-400'}`}>
+                  {upload.message}
+                </p>
               </div>
             </div>
-            <span className="text-sm font-semibold text-primary">{upload.progress}%</span>
+            {upload.status !== 'error' && upload.status !== 'done' && (
+              <span className="text-sm font-semibold text-primary">{upload.progress}%</span>
+            )}
           </div>
-          <div className="w-full bg-gray-100 rounded-full h-1.5">
-            <div
-              className="bg-primary h-1.5 rounded-full transition-all duration-500"
-              style={{ width: `${upload.progress}%` }}
-            />
-          </div>
+          {upload.status !== 'error' && (
+            <div className="w-full bg-gray-100 rounded-full h-1.5">
+              <div
+                className={`h-1.5 rounded-full transition-all duration-500 ${
+                  upload.status === 'done' ? 'bg-emerald-500' : 'bg-primary'
+                }`}
+                style={{ width: `${upload.progress}%` }}
+              />
+            </div>
+          )}
         </div>
       ))}
     </div>

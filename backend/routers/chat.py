@@ -4,6 +4,7 @@ RAG pipeline endpoint: retrieve → rerank → generate.
 """
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from models.schemas import ChatRequest, ChatResponse
 from services.retriever import retrieve_and_rerank
 from services.generator import generate_answer
@@ -12,10 +13,16 @@ from services.auth_service import get_current_user
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
 
+class ChatMessageRequest(BaseModel):
+    """Frontend sends { session_id, message }."""
+    message: str
+    session_id: str | None = None
+
+
 @router.post("/", response_model=ChatResponse)
 async def chat(
-    request: ChatRequest,
-    current_user: dict = Depends(get_current_user)
+    request: ChatMessageRequest,
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Main RAG endpoint.
@@ -27,12 +34,14 @@ async def chat(
     4. Generate answer with Qwen2.5-7B-Instruct based on context.
     5. Return answer + source references (page number, bounding boxes, snippet).
     """
+    query = request.message
+
     # Step 1-3: Retrieve and rerank
-    top_chunks, sources = retrieve_and_rerank(request.query)
+    top_chunks, sources = retrieve_and_rerank(query)
 
     # Step 4: Generate answer
     if top_chunks:
-        answer = generate_answer(request.query, top_chunks)
+        answer = generate_answer(query, top_chunks)
     else:
         answer = (
             "Maaf, saya tidak menemukan informasi yang relevan dalam dokumen yang tersedia. "
