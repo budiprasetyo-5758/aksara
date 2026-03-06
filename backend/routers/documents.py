@@ -15,7 +15,7 @@ from models.schemas import (
     DocumentSyncResponse,
     StatsResponse,
 )
-from services.supabase_client import get_supabase_client
+from services.supabase_client import get_supabase_client, get_authenticated_client
 from services.parser import parse_pdf, get_total_pages
 from services.embedder import embed_texts, store_embeddings_in_supabase
 from services.auth_service import require_admin, get_current_user
@@ -30,10 +30,8 @@ async def get_page_image(
     page_number: int,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Render a specific page of a PDF document as a JPEG image.
-    """
-    client = get_supabase_client()
+    """Render a specific page of a PDF document as a JPEG image."""
+    client = get_authenticated_client(current_user["access_token"])
 
     doc = client.table("documents").select("storage_path, file_type").eq("id", doc_id).single().execute()
     if not doc.data:
@@ -78,6 +76,35 @@ async def get_page_image(
         raise HTTPException(status_code=500, detail=f"Failed to render page: {str(e)}")
 
 
+# ── Stats (put BEFORE /{doc_id} routes to avoid path conflicts) ──
+@router.get("/stats", response_model=StatsResponse)
+async def get_stats(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get document management statistics."""
+    client = get_authenticated_client(current_user["access_token"])
+
+    total_resp = client.table("documents").select("id", count="exact").execute()
+    total = total_resp.count or 0
+
+    pages_resp = client.table("documents").select("total_pages").eq("status", "indexed").execute()
+    indexed_pages = sum(d["total_pages"] for d in (pages_resp.data or []))
+
+    active_resp = client.table("documents").select("id", count="exact").eq("is_active", True).execute()
+    active_count = active_resp.count or 0
+    active_pct = (active_count / total * 100) if total > 0 else 0
+
+    size_resp = client.table("documents").select("file_size").execute()
+    storage_bytes = sum(d["file_size"] for d in (size_resp.data or []))
+
+    return StatsResponse(
+        total_documents=total,
+        indexed_pages=indexed_pages,
+        active_percentage=round(active_pct, 1),
+        storage_used_bytes=storage_bytes,
+    )
+
+
 # ── List Documents ─────────────────────────────────────
 @router.get("/", response_model=DocumentListResponse)
 async def list_documents(
@@ -87,7 +114,7 @@ async def list_documents(
     current_user: dict = Depends(get_current_user),
 ):
     """List all documents with optional status filter and pagination."""
-    client = get_supabase_client()
+    client = get_authenticated_client(current_user["access_token"])
     query = client.table("documents").select("*", count="exact")
 
     if status:
@@ -127,10 +154,7 @@ async def upload_document(
     file: UploadFile = File(...),
     admin_user: dict = Depends(require_admin),
 ):
-    """
-    Upload a document to Supabase Storage and create a metadata record.
-    Processing (parsing + embedding) is done asynchronously in the background.
-    """
+    """Upload a document to Supabase Storage and create a metadata record."""
     file_ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename else "unknown"
     if file_ext not in ("pdf", "docx", "txt"):
         raise HTTPException(status_code=400, detail="Unsupported file type. Use PDF, DOCX, or TXT.")
@@ -141,7 +165,7 @@ async def upload_document(
     if file_size > 25 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File exceeds 25MB limit.")
 
-    client = get_supabase_client()
+    client = get_authenticated_client(admin_user["access_token"])
 
     # Upload to Supabase Storage
     storage_path = f"uploads/{uuid.uuid4()}/{file.filename}"
@@ -166,7 +190,7 @@ async def upload_document(
     result = client.table("documents").insert(doc_data).execute()
     doc_id = result.data[0]["id"]
 
-    # Start background processing
+    # Start background processing (uses base client since no user context)
     background_tasks.add_task(process_document, doc_id, file_bytes, file_ext)
 
     return DocumentUploadResponse(
@@ -180,6 +204,7 @@ async def upload_document(
 # ── Background Processing ─────────────────────────────
 async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
     """Background task: parse document → generate embeddings → store in pgvector."""
+    # Background tasks use the base client (no user context available)
     client = get_supabase_client()
 
     try:
@@ -188,7 +213,6 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
         if file_ext == "pdf":
             chunks = parse_pdf(file_bytes)
         else:
-            # For txt files, create a single chunk
             text = file_bytes.decode("utf-8", errors="ignore")
             from models.schemas import ChunkData, BoundingBox
             chunks = [ChunkData(
@@ -206,11 +230,9 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
             client.table("documents").update({"status": "failed"}).eq("id", doc_id).execute()
             return
 
-        # Generate embeddings
         texts = [c.text for c in chunks]
         embeddings = embed_texts(texts)
 
-        # Store in Supabase
         chunk_dicts = [
             {
                 "text": c.text,
@@ -237,7 +259,7 @@ async def sync_document(
     admin_user: dict = Depends(require_admin),
 ):
     """Re-process a document: delete existing chunks, re-parse and re-embed."""
-    client = get_supabase_client()
+    client = get_authenticated_client(admin_user["access_token"])
 
     doc = client.table("documents").select("*").eq("id", doc_id).single().execute()
     if not doc.data:
@@ -265,7 +287,7 @@ async def toggle_document_status(
     admin_user: dict = Depends(require_admin),
 ):
     """Toggle the active status of a document."""
-    client = get_supabase_client()
+    client = get_authenticated_client(admin_user["access_token"])
 
     doc = client.table("documents").select("is_active").eq("id", doc_id).single().execute()
     if not doc.data:
@@ -284,7 +306,7 @@ async def delete_document(
     admin_user: dict = Depends(require_admin),
 ):
     """Delete a document and its chunks from DB and Storage."""
-    client = get_supabase_client()
+    client = get_authenticated_client(admin_user["access_token"])
 
     doc = client.table("documents").select("storage_path").eq("id", doc_id).single().execute()
     if not doc.data:
@@ -296,37 +318,7 @@ async def delete_document(
         except Exception:
             pass
 
-    # Delete chunks first (FK constraint), then document
     client.table("document_chunks").delete().eq("document_id", doc_id).execute()
     client.table("documents").delete().eq("id", doc_id).execute()
 
     return {"message": "Document deleted successfully."}
-
-
-# ── Stats ──────────────────────────────────────────────
-@router.get("/stats", response_model=StatsResponse)
-async def get_stats(
-    current_user: dict = Depends(get_current_user),
-):
-    """Get document management statistics."""
-    client = get_supabase_client()
-
-    total_resp = client.table("documents").select("id", count="exact").execute()
-    total = total_resp.count or 0
-
-    pages_resp = client.table("documents").select("total_pages").eq("status", "indexed").execute()
-    indexed_pages = sum(d["total_pages"] for d in (pages_resp.data or []))
-
-    active_resp = client.table("documents").select("id", count="exact").eq("is_active", True).execute()
-    active_count = active_resp.count or 0
-    active_pct = (active_count / total * 100) if total > 0 else 0
-
-    size_resp = client.table("documents").select("file_size").execute()
-    storage_bytes = sum(d["file_size"] for d in (size_resp.data or []))
-
-    return StatsResponse(
-        total_documents=total,
-        indexed_pages=indexed_pages,
-        active_percentage=round(active_pct, 1),
-        storage_used_bytes=storage_bytes,
-    )

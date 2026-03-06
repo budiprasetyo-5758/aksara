@@ -7,6 +7,11 @@ Run with:
     uvicorn main:app --reload --port 8000
 """
 
+# Must be set BEFORE any transformers/sentence_transformers import
+import os
+os.environ["USE_TF"] = "0"
+os.environ["USE_TORCH"] = "1"
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings

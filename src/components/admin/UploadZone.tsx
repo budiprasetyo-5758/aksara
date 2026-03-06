@@ -44,30 +44,31 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
 
   const handleUpload = async (files: File[]) => {
     for (const file of files) {
-      const uploadIndex = uploads.length + files.indexOf(file);
-
       // Add to upload list
       setUploads((prev) => [
         ...prev,
-        { fileName: file.name, progress: 30, status: 'uploading', message: 'Uploading...' },
+        { fileName: file.name, progress: 0, status: 'uploading', message: 'Uploading...' },
       ]);
 
       try {
-        // Update to processing
-        setUploads((prev) =>
-          prev.map((u) =>
-            u.fileName === file.name && u.status === 'uploading'
-              ? { ...u, progress: 60, status: 'processing', message: 'Processing & indexing...' }
-              : u
-          )
-        );
-
-        const result = await uploadDocument(file);
+        const result = await uploadDocument(file, (progress) => {
+          setUploads((prev) =>
+            prev.map((u) =>
+              u.fileName === file.name && u.status === 'uploading'
+                ? {
+                    ...u,
+                    progress,
+                    message: progress >= 90 ? 'Processing & indexing...' : `Uploading (${progress}%)...`,
+                  }
+                : u
+            )
+          );
+        });
 
         // Mark as done
         setUploads((prev) =>
           prev.map((u) =>
-            u.fileName === file.name && u.status === 'processing'
+            u.fileName === file.name
               ? { ...u, progress: 100, status: 'done', message: result.message }
               : u
           )
@@ -76,10 +77,13 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
         // Notify parent to refresh document list
         onUploadComplete?.();
       } catch (err: any) {
+        const errorMsg = err.message?.includes('Failed to fetch')
+          ? 'Cannot connect to backend server. Make sure the backend is running on port 8000.'
+          : err.message || 'Upload failed.';
         setUploads((prev) =>
           prev.map((u) =>
             u.fileName === file.name && (u.status === 'uploading' || u.status === 'processing')
-              ? { ...u, progress: 0, status: 'error', message: err.message || 'Upload failed.' }
+              ? { ...u, progress: 0, status: 'error', message: errorMsg }
               : u
           )
         );

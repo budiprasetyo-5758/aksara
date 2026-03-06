@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('profiles')
         .select('role, full_name, username, phone_number, avatar_url')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
         
       if (error) {
         console.error('[AuthContext] Error fetching profile:', error.message);
@@ -88,15 +88,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // Prevent unnecessary isLoading=true on redundant SIGNED_IN events (like when gaining window focus)
+      const isDuplicateSignIn = event === 'SIGNED_IN' && user?.id === session?.user?.id;
+      
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        setIsLoading(true);
-        fetchProfile(session.user.id).finally(() => setIsLoading(false));
-      } else {
+      
+      if (event === 'SIGNED_OUT') {
         setRole(null);
         setProfile(null);
+        setIsLoading(false);
+      } else if (event === 'SIGNED_IN' && !isDuplicateSignIn) {
+        setIsLoading(true);
+        if (session?.user) {
+          fetchProfile(session.user.id).finally(() => setIsLoading(false));
+        }
+      } else if (event === 'INITIAL_SESSION' && !session) {
         setIsLoading(false);
       }
     });

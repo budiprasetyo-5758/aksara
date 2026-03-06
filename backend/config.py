@@ -29,7 +29,12 @@ class Settings(BaseSettings):
     SIMILARITY_THRESHOLD: float = 0.5
 
     # ── CORS ───────────────────────────────────────────
-    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ]
 
     @property
     def effective_service_key(self) -> str:
@@ -39,6 +44,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 settings = Settings()

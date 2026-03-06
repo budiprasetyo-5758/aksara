@@ -6,7 +6,9 @@
 import { supabase } from './supabase';
 import type { SourceReference, Document } from '@/types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// In development, Vite proxy forwards /api/* to the backend (see vite.config.ts).
+// In production, set VITE_API_URL to the backend URL.
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 /** Helper to get the current auth token from Supabase session */
 async function getAuthToken(): Promise<string> {
@@ -78,30 +80,63 @@ export async function fetchDocuments(
   return response.json();
 }
 
-export async function uploadDocument(file: File): Promise<{
+export function uploadDocument(
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<{
   id: string;
   file_name: string;
   status: string;
   message: string;
 }> {
-  const token = await getAuthToken();
-  const formData = new FormData();
-  formData.append('file', file);
+  return new Promise(async (resolve, reject) => {
+    try {
+      const token = await getAuthToken();
+      const formData = new FormData();
+      formData.append('file', file);
 
-  const response = await fetch(`${API_BASE}/api/documents/upload`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-    body: formData,
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE}/api/documents/upload`);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+      if (onProgress) {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            // Cap upload progress at 90% until the server actually responds
+            const percent = Math.round((event.loaded / event.total) * 90);
+            onProgress(percent);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const result = JSON.parse(xhr.responseText);
+            if (onProgress) onProgress(100);
+            resolve(result);
+          } catch (e) {
+            reject(new Error('Invalid response from server'));
+          }
+        } else {
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            reject(new Error(errorData.detail || `Upload error: ${xhr.status}`));
+          } catch (e) {
+            reject(new Error(`Upload error: ${xhr.status} ${xhr.statusText}`));
+          }
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Network error or CORS issue during upload'));
+      };
+
+      xhr.send(formData);
+    } catch (err) {
+      reject(err);
+    }
   });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(errorData.detail || `Upload error: ${response.status}`);
-  }
-
-  return response.json();
 }
 
 export async function deleteDocument(docId: string): Promise<void> {
