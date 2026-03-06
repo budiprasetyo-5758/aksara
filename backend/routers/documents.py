@@ -3,9 +3,12 @@ AKSARA RSCM — Document Management Router
 Endpoints for uploading, listing, syncing, and deleting documents.
 """
 
+import io
 import os
+import uuid
 from datetime import datetime
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from models.schemas import (
     DocumentOut,
     DocumentListResponse,
@@ -16,9 +19,72 @@ from models.schemas import (
 from services.supabase_client import supabase as get_supabase_client
 from services.parser import process_pdf
 from services.embedder import generate_embeddings as embed_texts, store_embeddings_in_supabase
-from services.auth_service import require_admin
+from services.auth_service import require_admin, get_current_user
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
+
+
+@router.get("/{doc_id}/page/{page_number}/image")
+async def get_page_image(
+    doc_id: str,
+    page_number: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Render a specific page of a PDF document as a JPEG image.
+    Used by the frontend to show PDF page previews with bounding box highlights.
+    """
+    client = get_supabase_client()
+
+    # Fetch document metadata
+    doc = client.table("documents").select("storage_path, file_type").eq("id", doc_id).single().execute()
+    if not doc.data:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    if doc.data["file_type"] != "pdf":
+        raise HTTPException(status_code=400, detail="Page preview is only available for PDF documents.")
+
+    # Download from Supabase Storage
+    storage_path = doc.data["storage_path"]
+    try:
+        file_bytes = client.storage.from_("documents").download(storage_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download document: {str(e)}")
+
+    # Render page as image using PyMuPDF
+    try:
+        import fitz  # PyMuPDF
+
+        pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
+
+        if page_number < 1 or page_number > len(pdf_doc):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Page {page_number} out of range. Document has {len(pdf_doc)} pages."
+            )
+
+        page = pdf_doc[page_number - 1]  # 0-indexed
+
+        # Render at 2x resolution for crisp display
+        mat = fitz.Matrix(2.0, 2.0)
+        pix = page.get_pixmap(matrix=mat)
+
+        # Convert to JPEG
+        img_bytes = pix.tobytes("jpeg")
+        pdf_doc.close()
+
+        return StreamingResponse(
+            io.BytesIO(img_bytes),
+            media_type="image/jpeg",
+            headers={
+                "Cache-Control": "public, max-age=3600",
+                "Content-Disposition": f"inline; filename=page_{page_number}.jpg",
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to render page: {str(e)}")
 
 
 @router.get("/", response_model=DocumentListResponse)

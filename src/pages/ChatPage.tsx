@@ -25,10 +25,17 @@ const initialMessages: Message[] = [
     sources: [
       {
         document_id: '1',
-        file_name: 'IT_Policy.pdf',
+        file_name: 'IT_Policy_RSCM.pdf',
         page_number: 12,
-        bbox: { x: 0, y: 0, width: 100, height: 50 },
-        snippet: 'System Access Request Form...',
+        bbox: { x: 72, y: 340, width: 468, height: 120 },
+        snippet: 'Untuk mengajukan akses sistem EMR, staf harus mengisi formulir System Access Request melalui Intranet Portal...',
+      },
+      {
+        document_id: '2',
+        file_name: 'SOP_Pendaftaran_Residen.pdf',
+        page_number: 5,
+        bbox: { x: 72, y: 200, width: 468, height: 80 },
+        snippet: 'Proses pendaftaran residen baru memerlukan persetujuan kepala departemen dan estimasi waktu 1-2 hari kerja...',
       },
     ],
   },

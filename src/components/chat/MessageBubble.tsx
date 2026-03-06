@@ -1,14 +1,19 @@
-import { ThumbsUp, ThumbsDown, Link, Download } from 'lucide-react';
+import { useState } from 'react';
+import { ThumbsUp, ThumbsDown, BookOpen } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Message } from '@/types';
+import type { Message, SourceReference } from '@/types';
 import aksaraLogo from '@/assets/aksara-logo.png';
+import { SourceCard } from './SourceCard';
+import { PdfPreviewModal } from './PdfPreviewModal';
 
 interface MessageBubbleProps {
   message: Message;
 }
 
 export function MessageBubble({ message }: MessageBubbleProps) {
+  const [previewSource, setPreviewSource] = useState<SourceReference | null>(null);
+
   if (message.isLoading) {
     return (
       <div className="w-full mb-8">
@@ -60,17 +65,24 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
           </div>
 
-          {/* Action Buttons */}
+          {/* Source Citations */}
           {message.sources && message.sources.length > 0 && (
-            <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
-              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-                <Link className="w-3.5 h-3.5" />
-                Go to Intranet Portal
-              </button>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-                <Download className="w-3.5 h-3.5" />
-                Download Guide PDF
-              </button>
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-1.5 mb-3">
+                <BookOpen className="w-3.5 h-3.5 text-gray-400" />
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Sumber ({message.sources.length})
+                </p>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+                {message.sources.map((source, index) => (
+                  <SourceCard
+                    key={`${source.document_id}-${source.page_number}-${index}`}
+                    source={source}
+                    onClick={() => setPreviewSource(source)}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
@@ -85,6 +97,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         </div>
       </div>
+
+      {/* PDF Preview Modal */}
+      {previewSource && (
+        <PdfPreviewModal
+          source={previewSource}
+          onClose={() => setPreviewSource(null)}
+        />
+      )}
     </div>
   );
 }
