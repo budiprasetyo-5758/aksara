@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
@@ -36,6 +36,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<'admin' | 'user' | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Track current user ID in a ref to bypass stale closures in useEffect
+  const currentUserId = useRef<string | undefined>(undefined);
 
   // Fetch full profile from profiles table
   const fetchProfile = async (userId: string) => {
@@ -78,6 +81,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      currentUserId.current = session?.user?.id;
+      
       if (session?.user) {
         fetchProfile(session.user.id).finally(() => setIsLoading(false));
       } else {
@@ -90,12 +95,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       // Prevent unnecessary isLoading=true on redundant SIGNED_IN events (like when gaining window focus)
-      const isDuplicateSignIn = event === 'SIGNED_IN' && user?.id === session?.user?.id;
+      // We use currentUserId.current instead of 'user' to avoid stale closure state
+      const isDuplicateSignIn = event === 'SIGNED_IN' && currentUserId.current === session?.user?.id;
       
       setSession(session);
       setUser(session?.user ?? null);
+      if (session?.user) {
+        currentUserId.current = session.user.id;
+      } else {
+        currentUserId.current = undefined;
+      }
       
       if (event === 'SIGNED_OUT') {
+        currentUserId.current = undefined;
         setRole(null);
         setProfile(null);
         setIsLoading(false);
