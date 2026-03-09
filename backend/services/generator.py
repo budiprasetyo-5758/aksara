@@ -4,30 +4,29 @@ Uses Qwen/Qwen2.5-7B-Instruct via HuggingFace Inference API to generate answers 
 """
 
 import json
-from huggingface_hub import InferenceClient
+from groq import Groq
 from config import settings
 
-_client: InferenceClient | None = None
+_client: Groq | None = None
 
 SYSTEM_PROMPT = """Anda adalah AKSARA, asisten AI resmi dari RSCM (Rumah Sakit Cipto Mangunkusumo).
-Tugas Anda adalah menjawab pertanyaan staf rumah sakit HANYA berdasarkan konteks dokumen yang diberikan.
+Tugas utama Anda adalah menjawab pertanyaan staf rumah sakit berdasarkan konteks dokumen yang diberikan.
 
 Aturan ketat:
 1. Jawab HANYA dalam Bahasa Indonesia.
-2. Hanya gunakan informasi dari konteks yang diberikan. JANGAN mengarang informasi.
-3. Jika informasi tidak tersedia dalam konteks, katakan: "Maaf, informasi tersebut tidak ditemukan dalam dokumen yang tersedia."
-4. Sertakan referensi halaman jika memungkinkan.
-5. Gunakan format markdown untuk jawaban yang terstruktur (numbered list, bold, blockquote).
-6. Bersikap profesional, ringkas, dan akurat."""
+2. Untuk pertanyaan informasi/fakta, gunakan HANYA informasi dari konteks yang diberikan. JANGAN mengarang informasi (halusinasi).
+3. Jika pengguna menanyakan fakta namun tidak tersedia dalam konteks, katakan: "Maaf, informasi tersebut tidak ditemukan dalam dokumen yang tersedia."
+4. Jika pengguna hanya memberikan sapaan santai (seperti "halo", "selamat siang", "terima kasih"), silakan balas sapaan tersebut dengan ramah dan profesional tanpa perlu mencari dokumen.
+5. Sertakan referensi halaman jika memungkinkan.
+6. Gunakan format markdown untuk tulisan."""
 
 
-def get_inference_client() -> InferenceClient:
-    """Get a HuggingFace InferenceClient (lazy singleton)."""
+def get_inference_client() -> Groq:
+    """Get a Groq client (lazy singleton)."""
     global _client
     if _client is None:
-        _client = InferenceClient(
-            model=settings.LLM_MODEL,
-            token=settings.HF_API_TOKEN if settings.HF_API_TOKEN else None,
+        _client = Groq(
+            api_key=settings.GROQ_API_KEY,
         )
     return _client
 
@@ -79,8 +78,9 @@ Berikan jawaban yang akurat berdasarkan konteks di atas. Gunakan format markdown
         {"role": "user", "content": user_prompt},
     ]
 
-    response = client.chat_completion(
+    response = client.chat.completions.create(
         messages=messages,
+        model=settings.LLM_MODEL,
         max_tokens=1024,
         temperature=0.3,
         top_p=0.9,

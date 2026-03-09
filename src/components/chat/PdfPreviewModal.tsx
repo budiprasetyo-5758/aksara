@@ -7,6 +7,8 @@ interface PdfPreviewModalProps {
   onClose: () => void;
 }
 
+import { supabase } from '@/lib/supabase';
+
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
@@ -23,9 +25,18 @@ export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
       setLoading(true);
       setError(null);
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = {};
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+
         const url = `${API_BASE}/api/documents/${source.document_id}/page/${source.page_number}/image`;
-        const response = await fetch(url);
+        const response = await fetch(url, { headers });
         if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error(`Unauthorized (403). Session mungkin kedaluwarsa.`);
+          }
           throw new Error(`Failed to load page image (${response.status})`);
         }
         const blob = await response.blob();

@@ -40,13 +40,7 @@ async def chat(
     top_chunks, sources = retrieve_and_rerank(query)
 
     # Step 4: Generate answer
-    if top_chunks:
-        answer = generate_answer(query, top_chunks)
-    else:
-        answer = (
-            "Maaf, saya tidak menemukan informasi yang relevan dalam dokumen yang tersedia. "
-            "Silakan coba pertanyaan lain atau pastikan dokumen terkait sudah di-upload dan diindeks."
-        )
+    answer = generate_answer(query, top_chunks)
 
     # Step 5: Return structured response
     return ChatResponse(

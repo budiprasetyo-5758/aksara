@@ -3,19 +3,8 @@ AKSARA RSCM — Embedding Service
 Uses BAAI/bge-m3 via sentence-transformers to generate 1024-dim embeddings.
 """
 
-from sentence_transformers import SentenceTransformer
 from config import settings
 import numpy as np
-
-_model: SentenceTransformer | None = None
-
-
-def get_embedding_model() -> SentenceTransformer:
-    """Load the embedding model (lazy singleton)."""
-    global _model
-    if _model is None:
-        _model = SentenceTransformer(settings.EMBEDDING_MODEL)
-    return _model
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
@@ -28,10 +17,32 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     Returns:
         List of 1024-dimensional embedding vectors.
     """
-    model = get_embedding_model()
-    # bge-m3 expects instruction prefix for queries (not for passages)
-    embeddings = model.encode(texts, normalize_embeddings=True, show_progress_bar=True)
-    return embeddings.tolist()
+    import httpx
+    
+    headers = {
+        "Authorization": f"Bearer {settings.JINA_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    # Process texts in batches
+    all_embeddings = []
+    batch_size = 50
+    with httpx.Client() as client:
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            payload = {
+                "model": settings.EMBEDDING_MODEL,
+                "input": batch
+            }
+            response = client.post("https://api.jina.ai/v1/embeddings", headers=headers, json=payload, timeout=30.0)
+            response.raise_for_status()
+            data = response.json().get("data", [])
+            
+            # API returns results in order, but we can sort by index just in case
+            sorted_data = sorted(data, key=lambda x: x["index"])
+            all_embeddings.extend([item["embedding"] for item in sorted_data])
+            
+    return all_embeddings
 
 
 def embed_query(query: str) -> list[float]:
@@ -45,10 +56,23 @@ def embed_query(query: str) -> list[float]:
     Returns:
         1024-dimensional embedding vector.
     """
-    model = get_embedding_model()
-    # For retrieval, bge-m3 can benefit from a task instruction
-    embedding = model.encode(query, normalize_embeddings=True)
-    return embedding.tolist()
+    import httpx
+    
+    headers = {
+        "Authorization": f"Bearer {settings.JINA_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": settings.EMBEDDING_MODEL,
+        "input": [query]
+    }
+    
+    with httpx.Client() as client:
+        response = client.post("https://api.jina.ai/v1/embeddings", headers=headers, json=payload, timeout=30.0)
+        response.raise_for_status()
+        data = response.json().get("data", [])
+        return data[0]["embedding"]
 
 
 def store_embeddings_in_supabase(

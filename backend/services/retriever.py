@@ -4,21 +4,11 @@ AKSARA RSCM — Retrieval & Reranking Service
 2. Cross-encoder reranking with BAAI/bge-reranker-v2-m3
 """
 
-from sentence_transformers import CrossEncoder
 from services.supabase_client import get_supabase_client
 from services.embedder import embed_query
 from models.schemas import SourceReference, BoundingBox
 from config import settings
-
-_reranker: CrossEncoder | None = None
-
-
-def get_reranker() -> CrossEncoder:
-    """Load the reranker model (lazy singleton)."""
-    global _reranker
-    if _reranker is None:
-        _reranker = CrossEncoder(settings.RERANKER_MODEL)
-    return _reranker
+import httpx
 
 
 def retrieve_relevant_chunks(query: str) -> list[dict]:
@@ -61,17 +51,34 @@ def rerank_chunks(query: str, chunks: list[dict]) -> list[dict]:
     if not chunks:
         return []
 
-    reranker = get_reranker()
+    headers = {
+        "Authorization": f"Bearer {settings.JINA_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    documents = [chunk["content"] for chunk in chunks]
+    payload = {
+        "model": settings.RERANKER_MODEL,
+        "query": query,
+        "documents": documents
+    }
+    
+    try:
+        with httpx.Client() as client:
+            response = client.post("https://api.jina.ai/v1/rerank", headers=headers, json=payload, timeout=30.0)
+            response.raise_for_status()
+            results = response.json().get("results", [])
+            
+        for res in results:
+            idx = res["index"]
+            chunks[idx]["rerank_score"] = res["relevance_score"]
+    except Exception as e:
+        print(f"Reranking failed: {e}")
+        # Fallback to order derived from retrieval
+        for i, chunk in enumerate(chunks):
+            chunk["rerank_score"] = float(len(chunks) - i)
 
-    # Prepare (query, passage) pairs for the cross-encoder
-    pairs = [(query, chunk["content"]) for chunk in chunks]
-    scores = reranker.predict(pairs)
-
-    # Attach scores and sort
-    for chunk, score in zip(chunks, scores):
-        chunk["rerank_score"] = float(score)
-
-    ranked = sorted(chunks, key=lambda c: c["rerank_score"], reverse=True)
+    ranked = sorted(chunks, key=lambda c: c.get("rerank_score", 0.0), reverse=True)
     return ranked[: settings.TOP_K_RERANK]
 
 
