@@ -206,3 +206,30 @@ export async function fetchSessionMessages(sessionId: string): Promise<ChatMessa
   const response = await authFetch(`/api/sessions/${sessionId}/messages`);
   return response.json();
 }
+
+export async function sendChatMessageMultimodal(
+  message: string,
+  sessionId: string,
+  file: File,
+): Promise<ChatApiResponse> {
+  const token = await getAuthToken();
+  const formData = new FormData();
+  formData.append('message', message);
+  formData.append('session_id', sessionId);
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}/api/chat/multimodal`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(errorData.detail || `API error: ${response.status}`);
+  }
+
+  return response.json();
+}

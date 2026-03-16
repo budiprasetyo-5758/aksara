@@ -89,6 +89,93 @@ Berikan jawaban yang akurat berdasarkan konteks di atas. Gunakan format markdown
     return response.choices[0].message.content
 
 
+def generate_answer_with_doc_context(query: str, doc_text: str, chunks: list[dict]) -> str:
+    """
+    Generate an answer using extracted document text as primary context,
+    plus optional RAG chunks as supplementary context. Uses the DOC_LLM_MODEL (qwen-3-32b).
+    """
+    rag_context = build_context(chunks) if chunks else ""
+
+    # Truncate doc_text to avoid exceeding token limits
+    max_doc_chars = 12000
+    if len(doc_text) > max_doc_chars:
+        doc_text = doc_text[:max_doc_chars] + "\n\n... (dokumen terpotong karena terlalu panjang)"
+
+    user_prompt = f"""Konteks dari Dokumen yang Dilampirkan Pengguna:
+{doc_text}
+
+{f"Konteks Tambahan dari Database:{chr(10)}{rag_context}" if rag_context else ""}
+
+Pertanyaan Pengguna:
+{query}
+
+Berikan jawaban yang akurat berdasarkan konteks di atas. Gunakan format markdown."""
+
+    client = get_inference_client()
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    response = client.chat.completions.create(
+        messages=messages,
+        model=settings.DOC_LLM_MODEL,
+        max_tokens=1024,
+        temperature=0.3,
+        top_p=0.9,
+    )
+
+    return response.choices[0].message.content
+
+
+def generate_answer_vision(query: str, image_base64: str, mime_type: str) -> str:
+    """
+    Generate an answer from an image using Groq's Llama 4 Scout vision model.
+
+    Args:
+        query: The user's text prompt.
+        image_base64: Base64-encoded image string.
+        mime_type: MIME type of the image (e.g. 'image/png').
+
+    Returns:
+        LLM-generated answer string.
+    """
+    client = get_inference_client()
+
+    messages = [
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT,
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": query if query.strip() else "Jelaskan gambar ini dalam Bahasa Indonesia.",
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{mime_type};base64,{image_base64}",
+                    },
+                },
+            ],
+        },
+    ]
+
+    response = client.chat.completions.create(
+        messages=messages,
+        model=settings.VISION_MODEL,
+        max_tokens=1024,
+        temperature=0.3,
+        top_p=0.9,
+    )
+
+    return response.choices[0].message.content
+
+
 def generate_answer_local(query: str, chunks: list[dict]) -> str:
     """
     Alternative: Generate using local Transformers pipeline.

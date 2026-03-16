@@ -3,6 +3,7 @@ import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatArea } from '@/components/chat/ChatArea';
 import {
   sendChatMessage,
+  sendChatMessageMultimodal,
   fetchSessions,
   createSession,
   deleteSession,
@@ -45,6 +46,7 @@ export function ChatPage() {
         content: m.content,
         timestamp: new Date(m.created_at),
         sources: m.sources,
+        attachmentName: m.attachment_name,
       }));
       setMessages(mapped);
     } catch (error) {
@@ -106,7 +108,7 @@ export function ChatPage() {
     }
   }, []);
 
-  const handleSend = async (content: string) => {
+  const handleSend = async (content: string, file?: File) => {
     // If no active session, create one first
     let sessionId = activeSessionId;
     if (!sessionId) {
@@ -124,8 +126,9 @@ export function ChatPage() {
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content,
+      content: content || (file ? `📎 ${file.name}` : ''),
       timestamp: new Date(),
+      attachmentName: file?.name,
     };
 
     const loadingMessage: Message = {
@@ -142,7 +145,9 @@ export function ChatPage() {
     });
 
     try {
-      const response = await sendChatMessage(content, sessionId);
+      const response = file
+        ? await sendChatMessageMultimodal(content, sessionId, file)
+        : await sendChatMessage(content, sessionId);
 
       const assistantMessage: Message = {
         id: (Date.now() + 2).toString(),

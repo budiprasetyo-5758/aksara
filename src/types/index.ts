@@ -5,6 +5,7 @@ export interface Message {
   content: string;
   timestamp: Date;
   sources?: SourceReference[];
+  attachmentName?: string;
   isLoading?: boolean;
 }
 
@@ -36,6 +37,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   sources?: SourceReference[];
+  attachment_name?: string;
   created_at: string;
 }
 

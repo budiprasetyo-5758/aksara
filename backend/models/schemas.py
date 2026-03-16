@@ -103,4 +103,5 @@ class MessageOut(BaseModel):
     role: str
     content: str
     sources: list[SourceReference] | None = None
+    attachment_name: str | None = None
     created_at: str

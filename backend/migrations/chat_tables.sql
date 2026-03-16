@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS public.chat_messages (
     role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
     content TEXT NOT NULL,
     sources JSONB,
+    attachment_name TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

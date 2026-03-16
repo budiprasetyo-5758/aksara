@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ThumbsUp, ThumbsDown, BookOpen, RefreshCw, Copy, Share2, Check } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, BookOpen, RefreshCw, Copy, Share2, Check, Paperclip } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, SourceReference } from '@/types';
@@ -70,6 +70,12 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
             <p className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider text-right">You</p>
             <div className="bg-primary/10 border border-primary/20 rounded-2xl rounded-tr-sm px-4 py-3 text-gray-800 text-base leading-relaxed break-words">
               {message.content}
+              {message.attachmentName && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-primary/70 bg-primary/5 rounded-lg px-2.5 py-1.5 border border-primary/10">
+                  <Paperclip className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{message.attachmentName}</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center shrink-0 text-xs font-bold text-white shadow-sm mt-5">

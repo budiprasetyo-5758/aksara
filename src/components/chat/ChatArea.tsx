@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface ChatAreaProps {
   messages: Message[];
-  onSend: (message: string) => void;
+  onSend: (message: string, file?: File) => void;
   onRegenerate?: (messageId: string) => void;
   sessionTitle?: string;
   activeSessionId?: string | null;
