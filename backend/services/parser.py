@@ -4,6 +4,7 @@ Uses PyMuPDF (fitz) to extract text blocks from PDFs with page numbers and bound
 """
 
 import fitz  # PyMuPDF
+import base64
 from models.schemas import ChunkData, BoundingBox
 from config import settings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -15,6 +16,7 @@ def parse_pdf(file_bytes: bytes, file_name: str = "Unknown", file_url: str = "")
 
     Uses LangChain's RecursiveCharacterTextSplitter to ensure chunks 
     don't break mid-sentence. Stores page_number, file_name, and file_url in metadata.
+    Falls back to Vision API OCR for scanned/image-only pages.
 
     Args:
         file_bytes: Raw PDF file bytes.
@@ -40,8 +42,23 @@ def parse_pdf(file_bytes: bytes, file_name: str = "Unknown", file_url: str = "")
         page = doc.load_page(page_num)
         page_text = page.get_text("text")
 
+        # If the page has no extractable text, use Vision API OCR
         if not page_text.strip():
-            continue
+            print(f"[Parser] Page {page_num + 1} of '{file_name}' has no text — using Vision OCR...")
+            try:
+                from services.generator import extract_text_vision
+                pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
+                img_bytes = pix.tobytes("jpeg")
+                img_base64 = base64.b64encode(img_bytes).decode("utf-8")
+                page_text = extract_text_vision(img_base64, "image/jpeg")
+                if page_text.strip():
+                    print(f"[Parser] Vision OCR extracted {len(page_text)} chars from page {page_num + 1}")
+                else:
+                    print(f"[Parser] Vision OCR returned empty for page {page_num + 1}, skipping.")
+                    continue
+            except Exception as e:
+                print(f"[Parser] Vision OCR failed for page {page_num + 1}: {e}")
+                continue
 
         # Split the text from this page semantically
         page_chunks = text_splitter.split_text(page_text)

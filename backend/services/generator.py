@@ -187,6 +187,62 @@ def generate_answer_vision(query: str, image_base64: str, mime_type: str) -> str
     return response.choices[0].message.content
 
 
+def extract_text_vision(image_base64: str, mime_type: str = "image/jpeg") -> str:
+    """
+    Extract raw text from a scanned document image using the Groq Vision model.
+    Used as an OCR fallback when PyMuPDF cannot extract text from image-only PDF pages.
+
+    Args:
+        image_base64: Base64-encoded image of the PDF page.
+        mime_type: MIME type of the image (default: 'image/jpeg').
+
+    Returns:
+        Extracted text string from the image.
+    """
+    client = get_inference_client()
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        "Ekstrak semua teks yang ada di gambar dokumen ini secara persis dan lengkap. "
+                        "Keluarkan hanya teks mentah tanpa format markdown, tanpa code block, "
+                        "dan tanpa komentar atau penjelasan tambahan apapun."
+                    ),
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{mime_type};base64,{image_base64}",
+                    },
+                },
+            ],
+        },
+    ]
+
+    try:
+        response = client.chat.completions.create(
+            messages=messages,
+            model=settings.VISION_MODEL,
+            max_tokens=2048,
+            temperature=0.1,
+        )
+        text = response.choices[0].message.content or ""
+        # Strip any accidental markdown code fences
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        return text.strip()
+    except Exception as e:
+        print(f"[VisionOCR] Failed to extract text: {e}")
+        return ""
+
+
 def generate_answer_local(query: str, chunks: list[dict]) -> str:
     """
     Alternative: Generate using local Transformers pipeline.
