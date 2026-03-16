@@ -1,6 +1,6 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield } from 'lucide-react';
+import { Shield, Pencil, Check, X } from 'lucide-react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import type { Message } from '@/types';
@@ -12,15 +12,54 @@ interface ChatAreaProps {
   onSend: (message: string) => void;
   onRegenerate?: (messageId: string) => void;
   sessionTitle?: string;
+  activeSessionId?: string | null;
+  onRenameSession?: (sessionId: string, newTitle: string) => void;
 }
 
-export function ChatArea({ messages, onSend, onRegenerate, sessionTitle }: ChatAreaProps) {
+export function ChatArea({ messages, onSend, onRegenerate, sessionTitle, activeSessionId, onRenameSession }: ChatAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { role } = useAuth();
+  
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitleValue, setEditTitleValue] = useState('');
+  const editTitleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (isEditingTitle && editTitleInputRef.current) {
+      editTitleInputRef.current.focus();
+      editTitleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  const handleStartEditTitle = () => {
+    if (!activeSessionId || !onRenameSession) return;
+    setEditTitleValue(sessionTitle || 'New Chat');
+    setIsEditingTitle(true);
+  };
+
+  const handleConfirmEditTitle = () => {
+    if (activeSessionId && onRenameSession && editTitleValue.trim() && editTitleValue.trim() !== sessionTitle) {
+      onRenameSession(activeSessionId, editTitleValue.trim());
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleCancelEditTitle = () => {
+    setIsEditingTitle(false);
+    setEditTitleValue('');
+  };
+
+  const handleEditTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleConfirmEditTitle();
+    } else if (e.key === 'Escape') {
+      handleCancelEditTitle();
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0">
@@ -28,7 +67,46 @@ export function ChatArea({ messages, onSend, onRegenerate, sessionTitle }: ChatA
       <header className="relative z-10 h-14 min-h-[56px] border-b border-gray-200 bg-white flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-3">
           <img src={aksaraLogo} alt="AKSARA Logo" className="w-7 h-7 object-contain" />
-          <h2 className="text-lg font-bold text-primary truncate max-w-xs">{sessionTitle || 'AKSARA'}</h2>
+          {isEditingTitle ? (
+            <div className="flex items-center gap-2">
+              <input
+                ref={editTitleInputRef}
+                type="text"
+                value={editTitleValue}
+                onChange={(e) => setEditTitleValue(e.target.value)}
+                onKeyDown={handleEditTitleKeyDown}
+                onBlur={handleConfirmEditTitle}
+                className="text-lg font-bold text-gray-700 bg-white border border-primary/30 rounded px-2 py-0.5 focus:outline-none focus:border-primary w-64 max-w-full"
+              />
+              <button
+                onMouseDown={(e) => { e.preventDefault(); handleConfirmEditTitle(); }}
+                className="p-1 text-green-500 hover:bg-green-50 rounded"
+                title="Save"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+              <button
+                onMouseDown={(e) => { e.preventDefault(); handleCancelEditTitle(); }}
+                className="p-1 text-gray-400 hover:bg-gray-100 rounded"
+                title="Cancel"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 group">
+              <h2 className="text-lg font-bold text-primary truncate max-w-xs">{sessionTitle || 'AKSARA'}</h2>
+              {activeSessionId && onRenameSession && (
+                <button
+                  onClick={handleStartEditTitle}
+                  className="p-1.5 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-md transition-all shrink-0"
+                  title="Rename session"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
         
         {role === 'admin' && (

@@ -192,6 +192,8 @@ export function ChatPage() {
           messages={messages}
           onSend={handleSend}
           sessionTitle={activeSession?.title || 'New Chat'}
+          activeSessionId={activeSessionId}
+          onRenameSession={handleRenameSession}
         />
       </div>
     </div>
