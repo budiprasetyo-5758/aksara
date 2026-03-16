@@ -9,16 +9,17 @@ from config import settings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
-def parse_pdf(file_bytes: bytes, file_name: str = "Unknown") -> list[ChunkData]:
+def parse_pdf(file_bytes: bytes, file_name: str = "Unknown", file_url: str = "") -> list[ChunkData]:
     """
     Parse a PDF file and extract text chunks semantically.
 
     Uses LangChain's RecursiveCharacterTextSplitter to ensure chunks 
-    don't break mid-sentence. Stores page_number and file_name in metadata.
+    don't break mid-sentence. Stores page_number, file_name, and file_url in metadata.
 
     Args:
         file_bytes: Raw PDF file bytes.
         file_name: The name of the document.
+        file_url: The public URL of the document.
 
     Returns:
         List of ChunkData with text, page_number, dummy bbox, chunk_index, and metadata.
@@ -58,7 +59,8 @@ def parse_pdf(file_bytes: bytes, file_name: str = "Unknown") -> list[ChunkData]:
                     chunk_index=chunk_index,
                     metadata={
                         "file_name": file_name,
-                        "page_number": page_num + 1
+                        "page_number": page_num + 1,
+                        "file_url": file_url
                     }
                 )
             )

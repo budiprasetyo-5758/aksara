@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ThumbsUp, ThumbsDown, BookOpen, RefreshCw, Copy, Share2, Check, Paperclip, FileText, Eye } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, BookOpen, RefreshCw, Copy, Share2, Check, Paperclip, FileText, Eye, Download } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, SourceReference } from '@/types';
@@ -96,7 +96,50 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
         <div className="flex-1 min-w-0">
           <p className="text-xs font-bold text-primary mb-1 uppercase tracking-wider">AKSARA</p>
           <div className="prose prose-base max-w-none text-gray-800 prose-p:leading-relaxed prose-a:text-primary hover:prose-a:text-primary-dark prose-headings:text-gray-900 prose-strong:text-gray-900 prose-li:my-0 break-words">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm]}
+              components={{
+                a: ({ node, ...props }) => {
+                  const isFileDownload = props.children && String(props.children).startsWith('FILE_DOWNLOAD:');
+                  if (isFileDownload) {
+                    const fileName = String(props.children).replace('FILE_DOWNLOAD:', '').trim();
+                    const url = props.href || '#';
+                    return (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="not-prose mt-4 mb-2 flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white shadow-sm hover:shadow-md transition-all group no-underline"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0 text-emerald-600">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-800 truncate m-0">
+                              {fileName}
+                            </p>
+                            <p className="text-xs text-emerald-600 font-medium mt-0.5 m-0 uppercase tracking-wide">
+                              Dokumen Tersedia
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-center shrink-0 w-8 h-8 rounded-full bg-emerald-600 text-white group-hover:scale-110 transition-transform shadow-sm">
+                          <Download className="w-4 h-4" />
+                        </div>
+                      </a>
+                    );
+                  }
+                  return (
+                    <a {...props} target="_blank" rel="noopener noreferrer">
+                      {props.children}
+                    </a>
+                  );
+                }
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
           </div>
 
           {/* Source Citations */}

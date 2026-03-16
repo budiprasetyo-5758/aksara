@@ -18,7 +18,8 @@ Aturan ketat:
 3. Jika pengguna menanyakan fakta namun tidak tersedia dalam konteks, katakan: "Maaf, informasi tersebut tidak ditemukan dalam dokumen yang tersedia."
 4. Jika pengguna hanya memberikan sapaan santai (seperti "halo", "selamat siang", "terima kasih"), silakan balas sapaan tersebut dengan ramah dan profesional tanpa perlu mencari dokumen.
 5. Sertakan referensi halaman jika memungkinkan.
-6. Gunakan format markdown untuk tulisan."""
+6. Gunakan format markdown untuk tulisan.
+7. PENTING: Jika pengguna secara eksplisit meminta untuk mengunduh, melihat, atau meminta file/dokumen berikan konfirmasi singkat bahwa file ditemukan, lalu buat link markdown dengan ekstrak `file_url` dari metadata dokumen dengan format persis seperti ini: `[FILE_DOWNLOAD: <file_name>](<file_url>)`."""
 
 
 def get_inference_client() -> Groq:
@@ -45,7 +46,17 @@ def build_context(chunks: list[dict]) -> str:
     for i, chunk in enumerate(chunks, 1):
         page = chunk.get("page_number", "?")
         content = chunk.get("content", "")
-        context_parts.append(f"[Dokumen {i}, Halaman {page}]\n{content}")
+        # Retrieve metadata for file_name and file_url
+        metadata = chunk.get("metadata", {})
+        file_name = metadata.get("file_name") or chunk.get("file_name", "?")
+        file_url = metadata.get("file_url", "")
+        
+        file_info = f"[Dokumen {i}: {file_name}"
+        if file_url:
+            file_info += f", URL: {file_url}"
+        file_info += f", Halaman {page}]\n{content}"
+            
+        context_parts.append(file_info)
 
     return "\n\n---\n\n".join(context_parts)
 

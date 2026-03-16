@@ -176,6 +176,9 @@ async def upload_document(
     if file_ext == "pdf":
         total_pages = get_total_pages(file_bytes)
 
+    # Get public URL
+    file_url = client.storage.from_("documents").get_public_url(storage_path)
+
     # Insert document metadata
     doc_data = {
         "file_name": file.filename,
@@ -191,7 +194,7 @@ async def upload_document(
     doc_id = result.data[0]["id"]
 
     # Start background processing (uses base client since no user context)
-    background_tasks.add_task(process_document, doc_id, file_bytes, file_ext)
+    background_tasks.add_task(process_document, doc_id, file_bytes, file_ext, file_url)
 
     return DocumentUploadResponse(
         id=str(doc_id),
@@ -202,7 +205,7 @@ async def upload_document(
 
 
 # ── Background Processing ─────────────────────────────
-async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
+async def process_document(doc_id: str, file_bytes: bytes, file_ext: str, file_url: str = ""):
     """Background task: parse document → generate embeddings → store in pgvector."""
     # Background tasks use the base client (no user context available)
     client = get_supabase_client()
@@ -215,7 +218,7 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
         file_name = doc_meta.data.get("file_name", "Unknown") if doc_meta.data else "Unknown"
 
         if file_ext == "pdf":
-            chunks = parse_pdf(file_bytes, file_name=file_name)
+            chunks = parse_pdf(file_bytes, file_name=file_name, file_url=file_url)
         else:
             text = file_bytes.decode("utf-8", errors="ignore")
             from models.schemas import ChunkData, BoundingBox
@@ -224,7 +227,7 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
                 page_number=1,
                 bbox=BoundingBox(x=0, y=0, width=0, height=0),
                 chunk_index=0,
-                metadata={"file_name": file_name, "page_number": 1}
+                metadata={"file_name": file_name, "page_number": 1, "file_url": file_url}
             )]
 
         total_pages = max((c.page_number for c in chunks), default=0) if chunks else 0
@@ -279,8 +282,9 @@ async def sync_document(
 
     storage_path = doc.data["storage_path"]
     file_bytes = client.storage.from_("documents").download(storage_path)
+    file_url = client.storage.from_("documents").get_public_url(storage_path)
 
-    background_tasks.add_task(process_document, doc_id, file_bytes, doc.data["file_type"])
+    background_tasks.add_task(process_document, doc_id, file_bytes, doc.data["file_type"], file_url)
 
     return DocumentSyncResponse(
         id=doc_id,
