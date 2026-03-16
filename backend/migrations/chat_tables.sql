@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS public.chat_messages (
     session_id UUID NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
     role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
     content TEXT NOT NULL,
+    sources JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

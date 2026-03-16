@@ -39,11 +39,12 @@ export function ChatPage() {
   const loadMessages = async (sessionId: string) => {
     try {
       const data = await fetchSessionMessages(sessionId);
-      const mapped: Message[] = data.map((m) => ({
+      const mapped: Message[] = data.map((m: any) => ({
         id: m.id,
         role: m.role as 'user' | 'assistant',
         content: m.content,
         timestamp: new Date(m.created_at),
+        sources: m.sources,
       }));
       setMessages(mapped);
     } catch (error) {

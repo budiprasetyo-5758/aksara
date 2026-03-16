@@ -155,6 +155,7 @@ async def get_session_messages(
             session_id=str(m["session_id"]),
             role=m["role"],
             content=m["content"],
+            sources=m.get("sources"),
             created_at=str(m["created_at"]),
         )
         for m in (result.data or [])

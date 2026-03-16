@@ -62,6 +62,7 @@ async def chat(
                 "session_id": request.session_id,
                 "role": "assistant",
                 "content": answer,
+                "sources": [s.model_dump() for s in sources] if sources else None
             }).execute()
 
             # Auto-update session title from the first user message

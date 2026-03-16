@@ -102,4 +102,5 @@ class MessageOut(BaseModel):
     session_id: str
     role: str
     content: str
+    sources: list[SourceReference] | None = None
     created_at: str
