@@ -11,9 +11,10 @@ interface ChatAreaProps {
   messages: Message[];
   onSend: (message: string) => void;
   onRegenerate?: (messageId: string) => void;
+  sessionTitle?: string;
 }
 
-export function ChatArea({ messages, onSend, onRegenerate }: ChatAreaProps) {
+export function ChatArea({ messages, onSend, onRegenerate, sessionTitle }: ChatAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { role } = useAuth();
 
@@ -27,7 +28,7 @@ export function ChatArea({ messages, onSend, onRegenerate }: ChatAreaProps) {
       <header className="relative z-10 h-14 min-h-[56px] border-b border-gray-200 bg-white flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-3">
           <img src={aksaraLogo} alt="AKSARA Logo" className="w-7 h-7 object-contain" />
-          <h2 className="text-lg font-bold text-primary">AKSARA</h2>
+          <h2 className="text-lg font-bold text-primary truncate max-w-xs">{sessionTitle || 'AKSARA'}</h2>
         </div>
         
         {role === 'admin' && (

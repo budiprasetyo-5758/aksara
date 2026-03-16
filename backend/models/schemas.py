@@ -83,3 +83,23 @@ class StatsResponse(BaseModel):
     indexed_pages: int
     active_percentage: float
     storage_used_bytes: int
+
+
+# ── Chat Sessions ────────────────────────────────────────
+class SessionCreateRequest(BaseModel):
+    title: str = "New Chat"
+
+
+class SessionOut(BaseModel):
+    id: str
+    user_id: str
+    title: str
+    created_at: str
+
+
+class MessageOut(BaseModel):
+    id: str
+    session_id: str
+    role: str
+    content: str
+    created_at: str

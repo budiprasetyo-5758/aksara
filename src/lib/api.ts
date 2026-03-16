@@ -165,3 +165,39 @@ export async function fetchStats(): Promise<StatsApiResponse> {
   const response = await authFetch('/api/documents/stats');
   return response.json();
 }
+
+// ── Sessions ──────────────────────────────────────────
+
+import type { ChatSession, ChatMessage } from '@/types';
+
+export async function fetchSessions(): Promise<ChatSession[]> {
+  const response = await authFetch('/api/sessions/');
+  return response.json();
+}
+
+export async function createSession(title: string = 'New Chat'): Promise<ChatSession> {
+  const response = await authFetch('/api/sessions/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+  return response.json();
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  await authFetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+}
+
+export async function renameSession(sessionId: string, title: string): Promise<ChatSession> {
+  const response = await authFetch(`/api/sessions/${sessionId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+  return response.json();
+}
+
+export async function fetchSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+  const response = await authFetch(`/api/sessions/${sessionId}/messages`);
+  return response.json();
+}

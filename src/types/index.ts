@@ -25,11 +25,17 @@ export interface BoundingBox {
 
 export interface ChatSession {
   id: string;
+  user_id: string;
   title: string;
-  icon: 'document' | 'ticket' | 'medical';
-  category: 'tools';
-  color?: string;
-  updatedAt: Date;
+  created_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
 }
 
 // ── Document / Admin Types ──────────────────────────────

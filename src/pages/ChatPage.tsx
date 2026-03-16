@@ -1,23 +1,125 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatArea } from '@/components/chat/ChatArea';
-import { sendChatMessage } from '@/lib/api';
-import type { Message } from '@/types';
-
-function getSessionId(): string {
-  let sid = localStorage.getItem('aksara_session_id');
-  if (!sid) {
-    sid = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    localStorage.setItem('aksara_session_id', sid);
-  }
-  return sid;
-}
+import {
+  sendChatMessage,
+  fetchSessions,
+  createSession,
+  deleteSession,
+  renameSession,
+  fetchSessionMessages,
+} from '@/lib/api';
+import type { Message, ChatSession } from '@/types';
 
 export function ChatPage() {
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [sessionId] = useState(getSessionId);
+
+  // ── Load sessions on mount ────────────────────────────
+  useEffect(() => {
+    loadSessions();
+  }, []);
+
+  const loadSessions = async () => {
+    try {
+      const data = await fetchSessions();
+      setSessions(data);
+
+      // Auto-select the most recent session, or create one if none exist
+      if (data.length > 0) {
+        setActiveSessionId(data[0].id);
+        await loadMessages(data[0].id);
+      }
+    } catch (error) {
+      console.error('[ChatPage] Failed to load sessions:', error);
+    }
+  };
+
+  const loadMessages = async (sessionId: string) => {
+    try {
+      const data = await fetchSessionMessages(sessionId);
+      const mapped: Message[] = data.map((m) => ({
+        id: m.id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        timestamp: new Date(m.created_at),
+      }));
+      setMessages(mapped);
+    } catch (error) {
+      console.error('[ChatPage] Failed to load messages:', error);
+      setMessages([]);
+    }
+  };
+
+  // ── Handlers ──────────────────────────────────────────
+  const handleNewChat = useCallback(async () => {
+    try {
+      const newSession = await createSession();
+      setSessions((prev) => [newSession, ...prev]);
+      setActiveSessionId(newSession.id);
+      setMessages([]);
+    } catch (error) {
+      console.error('[ChatPage] Failed to create session:', error);
+    }
+  }, []);
+
+  const handleSelectSession = useCallback(async (sessionId: string) => {
+    if (sessionId === activeSessionId) return;
+    setActiveSessionId(sessionId);
+    await loadMessages(sessionId);
+  }, [activeSessionId]);
+
+  const handleDeleteSession = useCallback(async (sessionId: string) => {
+    try {
+      await deleteSession(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+
+      if (activeSessionId === sessionId) {
+        // Switch to the next available session or clear
+        setSessions((prev) => {
+          const remaining = prev.filter((s) => s.id !== sessionId);
+          if (remaining.length > 0) {
+            setActiveSessionId(remaining[0].id);
+            loadMessages(remaining[0].id);
+          } else {
+            setActiveSessionId(null);
+            setMessages([]);
+          }
+          return remaining;
+        });
+      }
+    } catch (error) {
+      console.error('[ChatPage] Failed to delete session:', error);
+    }
+  }, [activeSessionId]);
+
+  const handleRenameSession = useCallback(async (sessionId: string, newTitle: string) => {
+    try {
+      const updated = await renameSession(sessionId, newTitle);
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, title: updated.title } : s))
+      );
+    } catch (error) {
+      console.error('[ChatPage] Failed to rename session:', error);
+    }
+  }, []);
 
   const handleSend = async (content: string) => {
+    // If no active session, create one first
+    let sessionId = activeSessionId;
+    if (!sessionId) {
+      try {
+        const newSession = await createSession();
+        setSessions((prev) => [newSession, ...prev]);
+        setActiveSessionId(newSession.id);
+        sessionId = newSession.id;
+      } catch (error) {
+        console.error('[ChatPage] Failed to create session:', error);
+        return;
+      }
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -53,6 +155,10 @@ export function ChatPage() {
         const filtered = prev.filter((m) => !m.isLoading);
         return [...filtered, assistantMessage];
       });
+
+      // Refresh sessions to pick up title update
+      const updatedSessions = await fetchSessions();
+      setSessions(updatedSessions);
     } catch (error: any) {
       const errorMessage: Message = {
         id: (Date.now() + 2).toString(),
@@ -68,11 +174,25 @@ export function ChatPage() {
     }
   };
 
+  // Get active session title
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
+
   return (
     <div className="flex fixed inset-0 overflow-hidden bg-white">
-      <ChatSidebar />
+      <ChatSidebar
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSelectSession={handleSelectSession}
+        onNewChat={handleNewChat}
+        onDeleteSession={handleDeleteSession}
+        onRenameSession={handleRenameSession}
+      />
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
-        <ChatArea messages={messages} onSend={handleSend} />
+        <ChatArea
+          messages={messages}
+          onSend={handleSend}
+          sessionTitle={activeSession?.title || 'New Chat'}
+        />
       </div>
     </div>
   );

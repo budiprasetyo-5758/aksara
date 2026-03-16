@@ -15,7 +15,7 @@ os.environ["USE_TORCH"] = "1"
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
-from routers import documents, chat
+from routers import documents, chat, sessions
 
 app = FastAPI(
     title="AKSARA RSCM API",
@@ -35,6 +35,7 @@ app.add_middleware(
 # ── Include Routers ────────────────────────────────────
 app.include_router(documents.router)
 app.include_router(chat.router)
+app.include_router(sessions.router)
 
 
 @app.get("/")
