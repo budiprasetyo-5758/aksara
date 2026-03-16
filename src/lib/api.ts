@@ -35,6 +35,11 @@ async function authFetch(url: string, options: RequestInit = {}): Promise<Respon
     throw new Error(errorData.detail || `API error: ${response.status}`);
   }
 
+  // Handle 204 No Content gracefully without attempting to parse JSON
+  if (response.status === 204) {
+    return response;
+  }
+
   return response;
 }
 
