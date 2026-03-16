@@ -183,12 +183,12 @@ export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
         </div>
 
         {/* Footer — Snippet */}
-        {source.snippet && (
-          <div className="px-5 py-3 border-t border-gray-100 bg-gray-50">
+        {source.content && (
+          <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex-shrink-0">
             <p className="text-xs text-gray-500 font-medium mb-1">Kutipan Sumber:</p>
-            <p className="text-sm text-gray-700 leading-relaxed italic">
-              "{source.snippet}"
-            </p>
+            <div className="text-sm text-gray-700 leading-relaxed italic max-h-32 overflow-y-auto pr-2">
+              "{source.content}"
+            </div>
           </div>
         )}
       </div>

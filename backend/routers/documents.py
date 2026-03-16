@@ -210,8 +210,12 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
     try:
         client.table("documents").update({"status": "syncing"}).eq("id", doc_id).execute()
 
+        # Fetch the filename for metadata injection
+        doc_meta = client.table("documents").select("file_name").eq("id", doc_id).single().execute()
+        file_name = doc_meta.data.get("file_name", "Unknown") if doc_meta.data else "Unknown"
+
         if file_ext == "pdf":
-            chunks = parse_pdf(file_bytes)
+            chunks = parse_pdf(file_bytes, file_name=file_name)
         else:
             text = file_bytes.decode("utf-8", errors="ignore")
             from models.schemas import ChunkData, BoundingBox
@@ -220,6 +224,7 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
                 page_number=1,
                 bbox=BoundingBox(x=0, y=0, width=0, height=0),
                 chunk_index=0,
+                metadata={"file_name": file_name, "page_number": 1}
             )]
 
         total_pages = max((c.page_number for c in chunks), default=0) if chunks else 0
@@ -229,10 +234,6 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
         if not chunks:
             client.table("documents").update({"status": "failed"}).eq("id", doc_id).execute()
             return
-
-        # Fetch the filename for metadata injection
-        doc_meta = client.table("documents").select("file_name").eq("id", doc_id).single().execute()
-        file_name = doc_meta.data.get("file_name", "Unknown") if doc_meta.data else "Unknown"
 
         # Prepend filename to each chunk's text BEFORE embedding
         # This ensures filename keywords (e.g. "PERDIR") are searchable via vector similarity
@@ -247,6 +248,7 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
                 "page_number": c.page_number,
                 "bbox": {"x": c.bbox.x, "y": c.bbox.y, "width": c.bbox.width, "height": c.bbox.height},
                 "chunk_index": c.chunk_index,
+                "metadata": c.metadata,
             }
             for c in chunks
         ]

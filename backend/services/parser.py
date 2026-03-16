@@ -6,96 +6,63 @@ Uses PyMuPDF (fitz) to extract text blocks from PDFs with page numbers and bound
 import fitz  # PyMuPDF
 from models.schemas import ChunkData, BoundingBox
 from config import settings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
-def parse_pdf(file_bytes: bytes) -> list[ChunkData]:
+def parse_pdf(file_bytes: bytes, file_name: str = "Unknown") -> list[ChunkData]:
     """
-    Parse a PDF file and extract text chunks with metadata.
+    Parse a PDF file and extract text chunks semantically.
 
-    Each text block from PyMuPDF includes its bounding box (x0, y0, x1, y1).
-    We group blocks into chunks of approximately CHUNK_SIZE tokens,
-    preserving paragraph boundaries where possible.
+    Uses LangChain's RecursiveCharacterTextSplitter to ensure chunks 
+    don't break mid-sentence. Stores page_number and file_name in metadata.
 
     Args:
         file_bytes: Raw PDF file bytes.
+        file_name: The name of the document.
 
     Returns:
-        List of ChunkData with text, page_number, bbox, and chunk_index.
+        List of ChunkData with text, page_number, dummy bbox, chunk_index, and metadata.
     """
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     chunks: list[ChunkData] = []
     chunk_index = 0
 
-    current_text = ""
-    current_page = 0
-    current_bbox = BoundingBox(x=0, y=0, width=0, height=0)
+    # Initialize semantic text splitter
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=settings.CHUNK_SIZE * 4,  # Approximate chars from token count
+        chunk_overlap=settings.CHUNK_OVERLAP * 4,
+        separators=["\n\n", "\n", ". ", "? ", "! ", " ", ""],
+        keep_separator=True
+    )
 
     for page_num in range(len(doc)):
         page = doc.load_page(page_num)
-        # get_text("dict") returns blocks with bbox info
-        blocks = page.get_text("dict", sort=True)["blocks"]
+        page_text = page.get_text("text")
 
-        for block in blocks:
-            if block["type"] != 0:  # skip image blocks
+        if not page_text.strip():
+            continue
+
+        # Split the text from this page semantically
+        page_chunks = text_splitter.split_text(page_text)
+
+        for chunk_text in page_chunks:
+            chunk_text = chunk_text.strip()
+            if not chunk_text:
                 continue
 
-            # Extract text lines from spans
-            block_text = ""
-            for line in block.get("lines", []):
-                for span in line.get("spans", []):
-                    block_text += span["text"]
-                block_text += "\n"
-
-            block_text = block_text.strip()
-            if not block_text:
-                continue
-
-            # Bounding box: (x0, y0, x1, y1) → (x, y, width, height)
-            x0, y0, x1, y1 = block["bbox"]
-            block_bbox = BoundingBox(
-                x=round(x0, 2),
-                y=round(y0, 2),
-                width=round(x1 - x0, 2),
-                height=round(y1 - y0, 2),
-            )
-
-            # Check if adding this block exceeds chunk size
-            combined = (current_text + "\n" + block_text).strip() if current_text else block_text
-            token_count = len(combined.split())  # approximate token count
-
-            if token_count > settings.CHUNK_SIZE and current_text:
-                # Save current chunk
-                chunks.append(
-                    ChunkData(
-                        text=current_text.strip(),
-                        page_number=current_page + 1,  # 1-indexed
-                        bbox=current_bbox,
-                        chunk_index=chunk_index,
-                    )
+            chunks.append(
+                ChunkData(
+                    text=chunk_text,
+                    page_number=page_num + 1,  # 1-indexed
+                    bbox=BoundingBox(x=0, y=0, width=0, height=0),  # Bbox not reliable across splits
+                    chunk_index=chunk_index,
+                    metadata={
+                        "file_name": file_name,
+                        "page_number": page_num + 1
+                    }
                 )
-                chunk_index += 1
-
-                # Start new chunk with overlap
-                overlap_words = current_text.split()[-settings.CHUNK_OVERLAP :]
-                current_text = " ".join(overlap_words) + "\n" + block_text
-                current_page = page_num
-                current_bbox = block_bbox
-            else:
-                if not current_text:
-                    current_page = page_num
-                    current_bbox = block_bbox
-                current_text = combined
-
-    # Don't forget the last chunk
-    if current_text.strip():
-        chunks.append(
-            ChunkData(
-                text=current_text.strip(),
-                page_number=current_page + 1,
-                bbox=current_bbox,
-                chunk_index=chunk_index,
             )
-        )
+            chunk_index += 1
 
     doc.close()
     return chunks

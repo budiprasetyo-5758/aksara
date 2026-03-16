@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { ThumbsUp, ThumbsDown, BookOpen, RefreshCw, Copy, Share2, Check, Paperclip } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, BookOpen, RefreshCw, Copy, Share2, Check, Paperclip, FileText, Eye } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, SourceReference } from '@/types';
 import aksaraLogo from '@/assets/aksara-logo.png';
-import { SourceCard } from './SourceCard';
+// SourceCard unused, removed
 import { PdfPreviewModal } from './PdfPreviewModal';
 
 interface MessageBubbleProps {
@@ -101,20 +101,53 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
 
           {/* Source Citations */}
           {message.sources && message.sources.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="mt-5 pt-4 border-t border-gray-100">
               <div className="flex items-center gap-1.5 mb-3">
-                <BookOpen className="w-3.5 h-3.5 text-gray-400" />
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Sumber ({message.sources.length})
+                <BookOpen className="w-4 h-4 text-emerald-600" />
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Sumber Referensi ({message.sources.length})
                 </p>
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+              <div className="flex flex-col gap-2">
                 {message.sources.map((source, index) => (
-                  <SourceCard
+                  <details
                     key={`${source.document_id}-${source.page_number}-${index}`}
-                    source={source}
-                    onClick={() => setPreviewSource(source)}
-                  />
+                    className="group border border-gray-200 rounded-lg bg-gray-50 overflow-hidden [&_summary::-webkit-details-marker]:hidden"
+                  >
+                    <summary className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <span className="text-sm font-medium text-gray-700 truncate">
+                          {source.file_name}
+                        </span>
+                        <span className="text-xs text-gray-400 shrink-0 bg-white px-2 py-0.5 rounded-full border border-gray-200">
+                          Hal {source.page_number}
+                        </span>
+                      </div>
+                      <span className="text-xs font-medium text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
+                        Lihat Kutipan ↓
+                      </span>
+                    </summary>
+                    <div className="p-4 pt-2 bg-white border-t border-gray-100 text-sm text-gray-600 leading-relaxed relative">
+                      {source.content ? (
+                        <div className="whitespace-pre-wrap">{source.content}</div>
+                      ) : (
+                        <em className="text-gray-400">Teks tidak tersedia</em>
+                      )}
+                      
+                      {/* Button to open PDF preview modal */}
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setPreviewSource(source);
+                        }}
+                        className="mt-3 flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors px-3 py-1.5 rounded-md border border-emerald-100"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        Lihat PDF Asli
+                      </button>
+                    </div>
+                  </details>
                 ))}
               </div>
             </div>

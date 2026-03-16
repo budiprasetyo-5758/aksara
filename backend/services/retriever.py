@@ -164,30 +164,44 @@ def retrieve_and_rerank(query: str) -> tuple[list[dict], list[SourceReference]]:
 
     # Step 3: Build source references for frontend
     sources: list[SourceReference] = []
+    seen_contents = set()
+
     for chunk in top_chunks:
-        # Fetch the document name
-        client = get_supabase_client()
-        doc_response = (
-            client.table("documents")
-            .select("file_name")
-            .eq("id", chunk["document_id"])
-            .single()
-            .execute()
-        )
-        file_name = doc_response.data.get("file_name", "Unknown") if doc_response.data else "Unknown"
+        content = chunk.get("content", "")
+        # Very simple deduplication of identical chunk content
+        if content in seen_contents:
+            continue
+        seen_contents.add(content)
+        
+        # Extract metadata if available, otherwise fallback
+        metadata = chunk.get("metadata") or {}
+        
+        if "file_name" in metadata:
+            file_name = metadata["file_name"]
+        else:
+            # Fallback for old chunks without metadata
+            client = get_supabase_client()
+            doc_response = (
+                client.table("documents")
+                .select("file_name")
+                .eq("id", chunk["document_id"])
+                .single()
+                .execute()
+            )
+            file_name = doc_response.data.get("file_name", "Unknown") if doc_response.data else "Unknown"
 
         sources.append(
             SourceReference(
                 document_id=chunk["document_id"],
                 file_name=file_name,
-                page_number=chunk["page_number"],
+                page_number=chunk.get("page_number") or metadata.get("page_number", 1),
                 bbox=BoundingBox(
-                    x=chunk["bbox_x"],
-                    y=chunk["bbox_y"],
-                    width=chunk["bbox_width"],
-                    height=chunk["bbox_height"],
+                    x=chunk.get("bbox_x", 0),
+                    y=chunk.get("bbox_y", 0),
+                    width=chunk.get("bbox_width", 0),
+                    height=chunk.get("bbox_height", 0),
                 ),
-                snippet=chunk["content"][:200],
+                content=content,
             )
         )
 

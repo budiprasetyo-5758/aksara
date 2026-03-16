@@ -14,7 +14,7 @@ export interface SourceReference {
   file_name: string;
   page_number: number;
   bbox: BoundingBox;
-  snippet: string;
+  content: string;
 }
 
 export interface BoundingBox {

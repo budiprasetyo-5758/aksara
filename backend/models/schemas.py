@@ -21,8 +21,7 @@ class SourceReference(BaseModel):
     file_name: str
     page_number: int
     bbox: BoundingBox
-    snippet: str
-
+    content: str  # Replaced 'snippet' with 'content' for more clarity
 
 # ── Chat ─────────────────────────────────────────────────
 class ChatRequest(BaseModel):
@@ -75,7 +74,7 @@ class ChunkData(BaseModel):
     page_number: int
     bbox: BoundingBox
     chunk_index: int
-
+    metadata: dict  # Added for file_name and page_number JSONB storage
 
 # ── Stats ────────────────────────────────────────────────
 class StatsResponse(BaseModel):

@@ -5,11 +5,6 @@ import {
   File,
   RefreshCw,
   Trash2,
-  SlidersHorizontal,
-  ArrowDownUp,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Search,
   Loader2,
 } from 'lucide-react';

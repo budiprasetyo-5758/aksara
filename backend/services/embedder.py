@@ -108,6 +108,7 @@ def store_embeddings_in_supabase(
                 "bbox_width": chunk["bbox"]["width"],
                 "bbox_height": chunk["bbox"]["height"],
                 "embedding": embedding,
+                "metadata": chunk.get("metadata", {}),
             }
         )
 
