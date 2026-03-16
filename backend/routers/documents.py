@@ -230,8 +230,16 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str):
             client.table("documents").update({"status": "failed"}).eq("id", doc_id).execute()
             return
 
-        texts = [c.text for c in chunks]
-        embeddings = embed_texts(texts)
+        # Fetch the filename for metadata injection
+        doc_meta = client.table("documents").select("file_name").eq("id", doc_id).single().execute()
+        file_name = doc_meta.data.get("file_name", "Unknown") if doc_meta.data else "Unknown"
+
+        # Prepend filename to each chunk's text BEFORE embedding
+        # This ensures filename keywords (e.g. "PERDIR") are searchable via vector similarity
+        texts_for_embedding = [
+            f"Dokumen Sumber: {file_name}\n\nKonten:\n{c.text}" for c in chunks
+        ]
+        embeddings = embed_texts(texts_for_embedding)
 
         chunk_dicts = [
             {

@@ -1,7 +1,8 @@
 """
 AKSARA RSCM — Retrieval & Reranking Service
-1. Vector search in Supabase pgvector (top-K candidates)
-2. Cross-encoder reranking with BAAI/bge-reranker-v2-m3
+1. Query rewriting / expansion for short prompts
+2. Vector search in Supabase pgvector (top-K candidates)
+3. Cross-encoder reranking with BAAI/bge-reranker-v2-m3
 """
 
 from services.supabase_client import get_supabase_client
@@ -10,6 +11,66 @@ from models.schemas import SourceReference, BoundingBox
 from config import settings
 import httpx
 
+
+# ── Query Rewriting ────────────────────────────────────
+
+QUERY_REWRITER_PROMPT = """Anda adalah query expander untuk sistem RAG di RSCM (Rumah Sakit Cipto Mangunkusumo).
+
+Tugas Anda: Menerima query pendek/singkat dari pengguna rumah sakit, lalu memperluas dan menulis ulang menjadi query pencarian semantik yang detail dan optimal untuk pencarian vektor.
+
+Aturan:
+1. Perluas semua singkatan dan akronim rumah sakit, misalnya:
+   - "perdir" → "Peraturan Direktur Utama RSUP Nasional Dr. Cipto Mangunkusumo"
+   - "SPO" → "Standar Prosedur Operasional"
+   - "VIP" → "Very Important Person / ruangan kelas VIP"
+   - "DPJP" → "Dokter Penanggung Jawab Pelayanan"
+   - "JKN" → "Jaminan Kesehatan Nasional"
+   - "BPJS" → "Badan Penyelenggara Jaminan Sosial"
+   - "IGD" → "Instalasi Gawat Darurat"
+   - "ICU" → "Intensive Care Unit"
+   - "OK" → "Kamar Operasi / Operating Room"
+   - "RM" → "Rekam Medis"
+   - "PPK" → "Panduan Praktik Klinis"
+2. Tambahkan konteks yang relevan sesuai domain rumah sakit.
+3. Jawab HANYA dengan query yang sudah diperluas, tanpa penjelasan tambahan.
+4. Pertahankan bahasa Indonesia.
+5. Jangan ubah makna asli query, hanya perluas agar lebih detail.
+6. Jika query sudah cukup detail, kembalikan query asli tanpa perubahan."""
+
+
+def rewrite_query(raw_query: str) -> str:
+    """
+    Rewrite a short/vague user query into a detailed semantic search query
+    using the LLM. Falls back to the original query on error.
+    """
+    # Skip rewriting for very long or detailed queries
+    if len(raw_query.split()) > 15:
+        return raw_query
+
+    try:
+        from services.generator import get_inference_client
+
+        client = get_inference_client()
+        response = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": QUERY_REWRITER_PROMPT},
+                {"role": "user", "content": raw_query},
+            ],
+            model=settings.DOC_LLM_MODEL,
+            max_tokens=200,
+            temperature=0.1,
+        )
+        rewritten = response.choices[0].message.content.strip()
+        if rewritten:
+            print(f"[QueryRewriter] '{raw_query}' → '{rewritten}'")
+            return rewritten
+    except Exception as e:
+        print(f"[QueryRewriter] Failed, using original query: {e}")
+
+    return raw_query
+
+
+# ── Vector Retrieval ───────────────────────────────────
 
 def retrieve_relevant_chunks(query: str) -> list[dict]:
     """
@@ -84,7 +145,7 @@ def rerank_chunks(query: str, chunks: list[dict]) -> list[dict]:
 
 def retrieve_and_rerank(query: str) -> tuple[list[dict], list[SourceReference]]:
     """
-    Full retrieval pipeline: vector search → reranking → source references.
+    Full retrieval pipeline: query rewriting → vector search → reranking → source references.
 
     Args:
         query: The user's search query.
@@ -92,11 +153,14 @@ def retrieve_and_rerank(query: str) -> tuple[list[dict], list[SourceReference]]:
     Returns:
         Tuple of (reranked_chunks, source_references).
     """
-    # Step 1: Vector search
-    candidates = retrieve_relevant_chunks(query)
+    # Step 0: Rewrite/expand the query for better retrieval
+    expanded_query = rewrite_query(query)
 
-    # Step 2: Cross-encoder reranking
-    top_chunks = rerank_chunks(query, candidates)
+    # Step 1: Vector search (using expanded query)
+    candidates = retrieve_relevant_chunks(expanded_query)
+
+    # Step 2: Cross-encoder reranking (using expanded query)
+    top_chunks = rerank_chunks(expanded_query, candidates)
 
     # Step 3: Build source references for frontend
     sources: list[SourceReference] = []
@@ -128,3 +192,4 @@ def retrieve_and_rerank(query: str) -> tuple[list[dict], list[SourceReference]]:
         )
 
     return top_chunks, sources
+
