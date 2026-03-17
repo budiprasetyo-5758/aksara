@@ -104,3 +104,12 @@ class MessageOut(BaseModel):
     sources: list[SourceReference] | None = None
     attachment_name: str | None = None
     created_at: str
+
+
+# ── Document Search ──────────────────────────────────────
+class DocumentSearchResult(BaseModel):
+    id: str
+    file_name: str
+    file_url: str
+    file_type: str
+    total_pages: int

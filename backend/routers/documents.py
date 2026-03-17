@@ -13,6 +13,7 @@ from models.schemas import (
     DocumentListResponse,
     DocumentUploadResponse,
     DocumentSyncResponse,
+    DocumentSearchResult,
     StatsResponse,
 )
 from services.supabase_client import get_supabase_client, get_authenticated_client
@@ -22,6 +23,128 @@ from services.auth_service import require_admin, get_current_user
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
+
+# ── Document Search ────────────────────────────────────
+@router.get("/search", response_model=list[DocumentSearchResult])
+async def search_documents(
+    q: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Search for documents by keyword in file_name or chunk content."""
+    if not q or len(q.strip()) < 2:
+        return []
+
+    client = get_supabase_client()
+    keyword = q.strip()
+
+    def get_signed_file_url(storage_path: str) -> str:
+        """Generate a signed URL for private bucket access (1hr expiry)."""
+        try:
+            result = client.storage.from_("documents").create_signed_url(storage_path, 3600)
+            return result.get("signedURL", "") if isinstance(result, dict) else ""
+        except Exception:
+            return client.storage.from_("documents").get_public_url(storage_path)
+
+    # 1. Search by file_name (ilike)
+    name_resp = (
+        client.table("documents")
+        .select("id, file_name, file_type, total_pages, storage_path")
+        .eq("status", "indexed")
+        .eq("is_active", True)
+        .ilike("file_name", f"%{keyword}%")
+        .limit(20)
+        .execute()
+    )
+
+    # 2. Search by chunk content (ilike) → get distinct document_ids
+    chunk_resp = (
+        client.table("document_chunks")
+        .select("document_id")
+        .ilike("content", f"%{keyword}%")
+        .limit(50)
+        .execute()
+    )
+
+    # Collect unique document IDs
+    seen_ids: set[str] = set()
+    results: list[DocumentSearchResult] = []
+
+    # Process file-name matches first
+    for d in (name_resp.data or []):
+        doc_id = str(d["id"])
+        if doc_id in seen_ids:
+            continue
+        seen_ids.add(doc_id)
+        file_url = get_signed_file_url(d["storage_path"]) if d.get("storage_path") else ""
+        results.append(DocumentSearchResult(
+            id=doc_id,
+            file_name=d["file_name"],
+            file_url=file_url,
+            file_type=d["file_type"],
+            total_pages=d.get("total_pages", 0),
+        ))
+
+    # Process chunk-content matches
+    chunk_doc_ids = list({str(c["document_id"]) for c in (chunk_resp.data or [])} - seen_ids)
+    if chunk_doc_ids:
+        docs_resp = (
+            client.table("documents")
+            .select("id, file_name, file_type, total_pages, storage_path")
+            .eq("status", "indexed")
+            .eq("is_active", True)
+            .in_("id", chunk_doc_ids)
+            .limit(20)
+            .execute()
+        )
+        for d in (docs_resp.data or []):
+            doc_id = str(d["id"])
+            if doc_id in seen_ids:
+                continue
+            seen_ids.add(doc_id)
+            file_url = get_signed_file_url(d["storage_path"]) if d.get("storage_path") else ""
+            results.append(DocumentSearchResult(
+                id=doc_id,
+                file_name=d["file_name"],
+                file_url=file_url,
+                file_type=d["file_type"],
+                total_pages=d.get("total_pages", 0),
+            ))
+
+    return results[:20]
+
+
+# ── PDF Proxy (bypass Supabase iframe restrictions) ─────
+@router.get("/{doc_id}/view")
+async def view_document(
+    doc_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Proxy a document's PDF from Supabase Storage with iframe-safe headers."""
+    client = get_supabase_client()
+
+    doc = client.table("documents").select("storage_path, file_name, file_type").eq("id", doc_id).single().execute()
+    if not doc.data:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    storage_path = doc.data["storage_path"]
+    file_name = doc.data["file_name"]
+
+    try:
+        file_bytes = client.storage.from_("documents").download(storage_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download document: {str(e)}")
+
+    media_type = "application/pdf" if doc.data["file_type"] == "pdf" else "application/octet-stream"
+
+    return StreamingResponse(
+        io.BytesIO(file_bytes),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{file_name}"',
+            "X-Frame-Options": "SAMEORIGIN",
+            "Cache-Control": "public, max-age=1800",
+        },
+    )
 
 # ── Page Image Preview ─────────────────────────────────
 @router.get("/{doc_id}/page/{page_number}/image")

@@ -4,7 +4,7 @@
  */
 
 import { supabase } from './supabase';
-import type { SourceReference, Document } from '@/types';
+import type { SourceReference, Document, DocumentSearchResult } from '@/types';
 
 // In development, Vite proxy forwards /api/* to the backend (see vite.config.ts).
 // In production, set VITE_API_URL to the backend URL.
@@ -54,13 +54,24 @@ export interface ChatApiResponse {
 export async function sendChatMessage(
   message: string,
   sessionId: string,
+  documentId?: string,
 ): Promise<ChatApiResponse> {
+  const body: Record<string, string> = { message, session_id: sessionId };
+  if (documentId) body.document_id = documentId;
+
   const response = await authFetch('/api/chat/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, session_id: sessionId }),
+    body: JSON.stringify(body),
   });
 
+  return response.json();
+}
+
+// ── Document Search ───────────────────────────────────
+
+export async function searchDocuments(query: string): Promise<DocumentSearchResult[]> {
+  const response = await authFetch(`/api/documents/search?q=${encodeURIComponent(query)}`);
   return response.json();
 }
 

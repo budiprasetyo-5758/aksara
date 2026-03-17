@@ -85,3 +85,12 @@ export interface UploadProgress {
   progress: number;
   status: string;
 }
+
+// ── Document Workspace Types ────────────────────────────
+export interface DocumentSearchResult {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  total_pages: number;
+}

@@ -72,12 +72,14 @@ def rewrite_query(raw_query: str) -> str:
 
 # ── Vector Retrieval ───────────────────────────────────
 
-def retrieve_relevant_chunks(query: str) -> list[dict]:
+def retrieve_relevant_chunks(query: str, document_id: str | None = None) -> list[dict]:
     """
     Perform vector similarity search in Supabase and return top-K candidates.
+    When document_id is provided, restricts results to chunks from that document.
 
     Args:
         query: The user's search query.
+        document_id: Optional ID to scope search to a specific document.
 
     Returns:
         List of chunk dicts with content, metadata, and similarity score.
@@ -85,15 +87,27 @@ def retrieve_relevant_chunks(query: str) -> list[dict]:
     client = get_supabase_client()
     query_embedding = embed_query(query)
 
-    # Call the match_document_chunks RPC function
-    response = client.rpc(
-        "match_document_chunks",
-        {
-            "query_embedding": query_embedding,
-            "match_threshold": settings.SIMILARITY_THRESHOLD,
-            "match_count": settings.TOP_K_RETRIEVAL,
-        },
-    ).execute()
+    if document_id:
+        # Scoped search — only chunks from the specified document
+        response = client.rpc(
+            "match_document_chunks_by_id",
+            {
+                "query_embedding": query_embedding,
+                "filter_document_id": document_id,
+                "match_threshold": 0.3,  # Lower threshold for scoped search
+                "match_count": settings.TOP_K_RETRIEVAL,
+            },
+        ).execute()
+    else:
+        # Global search across all active documents
+        response = client.rpc(
+            "match_document_chunks",
+            {
+                "query_embedding": query_embedding,
+                "match_threshold": settings.SIMILARITY_THRESHOLD,
+                "match_count": settings.TOP_K_RETRIEVAL,
+            },
+        ).execute()
 
     return response.data or []
 
@@ -143,24 +157,26 @@ def rerank_chunks(query: str, chunks: list[dict]) -> list[dict]:
     return ranked[: settings.TOP_K_RERANK]
 
 
-def retrieve_and_rerank(query: str) -> tuple[list[dict], list[SourceReference]]:
+def retrieve_and_rerank(query: str, document_id: str | None = None) -> tuple[list[dict], list[SourceReference]]:
     """
     Full retrieval pipeline: query rewriting → vector search → reranking → source references.
 
     Args:
         query: The user's search query.
+        document_id: Optional ID to scope search to a specific document.
+        file_url: Optional URL to scope search to a specific document.
 
     Returns:
         Tuple of (reranked_chunks, source_references).
     """
     # Step 0: Rewrite/expand the query for better retrieval
-    expanded_query = rewrite_query(query)
+    rewritten_query = rewrite_query(query)
 
-    # Step 1: Vector search (using expanded query)
-    candidates = retrieve_relevant_chunks(expanded_query)
+    # Step 1: Vector search (scoped if document_id is provided)
+    candidates = retrieve_relevant_chunks(rewritten_query, document_id=document_id)
 
-    # Step 2: Cross-encoder reranking (using expanded query)
-    top_chunks = rerank_chunks(expanded_query, candidates)
+    # Step 2: Cross-encoder reranking (using rewritten query)
+    top_chunks = rerank_chunks(rewritten_query, candidates)
 
     # Step 3: Build source references for frontend
     sources: list[SourceReference] = []

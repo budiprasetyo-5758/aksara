@@ -19,9 +19,10 @@ router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
 
 class ChatMessageRequest(BaseModel):
-    """Frontend sends { session_id, message }."""
+    """Frontend sends { session_id, message, file_url? }."""
     message: str
     session_id: str | None = None
+    document_id: str | None = None  # Optional document ID for scoped retrieval
 
 
 @router.post("/", response_model=ChatResponse)
@@ -42,8 +43,8 @@ async def chat(
     """
     query = request.message
 
-    # Step 1-3: Retrieve and rerank
-    top_chunks, sources = retrieve_and_rerank(query)
+    # Step 1-3: Retrieve and rerank (scoped to document if document_id provided)
+    top_chunks, sources = retrieve_and_rerank(query, document_id=request.document_id)
 
     # Step 4: Generate answer
     answer = generate_answer(query, top_chunks)

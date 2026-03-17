@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatArea } from '@/components/chat/ChatArea';
+import { DocumentWorkspace } from '@/components/chat/DocumentWorkspace';
 import {
   sendChatMessage,
   sendChatMessageMultimodal,
@@ -10,12 +11,13 @@ import {
   renameSession,
   fetchSessionMessages,
 } from '@/lib/api';
-import type { Message, ChatSession } from '@/types';
+import type { Message, ChatSession, DocumentSearchResult } from '@/types';
 
 export function ChatPage() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [activeDocument, setActiveDocument] = useState<DocumentSearchResult | null>(null);
 
   // ── Load sessions on mount ────────────────────────────
   useEffect(() => {
@@ -62,6 +64,7 @@ export function ChatPage() {
       setSessions((prev) => [newSession, ...prev]);
       setActiveSessionId(newSession.id);
       setMessages([]);
+      setActiveDocument(null); // Reset workspace on new chat
     } catch (error) {
       console.error('[ChatPage] Failed to create session:', error);
     }
@@ -70,6 +73,7 @@ export function ChatPage() {
   const handleSelectSession = useCallback(async (sessionId: string) => {
     if (sessionId === activeSessionId) return;
     setActiveSessionId(sessionId);
+    setActiveDocument(null); // Reset workspace when switching sessions
     await loadMessages(sessionId);
   }, [activeSessionId]);
 
@@ -91,6 +95,7 @@ export function ChatPage() {
           }
           return remaining;
         });
+        setActiveDocument(null);
       }
     } catch (error) {
       console.error('[ChatPage] Failed to delete session:', error);
@@ -106,6 +111,14 @@ export function ChatPage() {
     } catch (error) {
       console.error('[ChatPage] Failed to rename session:', error);
     }
+  }, []);
+
+  const handleOpenDocument = useCallback((doc: DocumentSearchResult) => {
+    setActiveDocument(doc);
+  }, []);
+
+  const handleCloseDocument = useCallback(() => {
+    setActiveDocument(null);
   }, []);
 
   const handleSend = async (content: string, file?: File) => {
@@ -145,9 +158,12 @@ export function ChatPage() {
     });
 
     try {
+      // Pass document_id if in workspace mode (scoped chat)
+      const documentId = activeDocument?.id;
+
       const response = file
         ? await sendChatMessageMultimodal(content, sessionId, file)
-        : await sendChatMessage(content, sessionId);
+        : await sendChatMessage(content, sessionId, documentId);
 
       const assistantMessage: Message = {
         id: (Date.now() + 2).toString(),
@@ -194,13 +210,26 @@ export function ChatPage() {
         onRenameSession={handleRenameSession}
       />
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
-        <ChatArea
-          messages={messages}
-          onSend={handleSend}
-          sessionTitle={activeSession?.title || 'New Chat'}
-          activeSessionId={activeSessionId}
-          onRenameSession={handleRenameSession}
-        />
+        {activeDocument ? (
+          <DocumentWorkspace
+            document={activeDocument}
+            messages={messages}
+            onSend={handleSend}
+            onClose={handleCloseDocument}
+            sessionTitle={activeSession?.title || 'New Chat'}
+            activeSessionId={activeSessionId}
+            onRenameSession={handleRenameSession}
+          />
+        ) : (
+          <ChatArea
+            messages={messages}
+            onSend={handleSend}
+            sessionTitle={activeSession?.title || 'New Chat'}
+            activeSessionId={activeSessionId}
+            onRenameSession={handleRenameSession}
+            onOpenDocument={handleOpenDocument}
+          />
+        )}
       </div>
     </div>
   );

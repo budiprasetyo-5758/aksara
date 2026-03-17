@@ -1,9 +1,10 @@
 import { useRef, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, Pencil, Check, X } from 'lucide-react';
+import { Shield, Pencil, Check, X, FileSearch } from 'lucide-react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
-import type { Message } from '@/types';
+import { DocumentSearch } from './DocumentSearch';
+import type { Message, DocumentSearchResult } from '@/types';
 import aksaraLogo from '@/assets/aksara-logo.png';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -14,9 +15,11 @@ interface ChatAreaProps {
   sessionTitle?: string;
   activeSessionId?: string | null;
   onRenameSession?: (sessionId: string, newTitle: string) => void;
+  onOpenDocument?: (doc: DocumentSearchResult) => void;
+  scopedDocumentName?: string;
 }
 
-export function ChatArea({ messages, onSend, onRegenerate, sessionTitle, activeSessionId, onRenameSession }: ChatAreaProps) {
+export function ChatArea({ messages, onSend, onRegenerate, sessionTitle, activeSessionId, onRenameSession, onOpenDocument, scopedDocumentName }: ChatAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { role } = useAuth();
   
@@ -60,6 +63,8 @@ export function ChatArea({ messages, onSend, onRegenerate, sessionTitle, activeS
       handleCancelEditTitle();
     }
   };
+
+  const isEmpty = messages.length === 0;
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0">
@@ -107,6 +112,16 @@ export function ChatArea({ messages, onSend, onRegenerate, sessionTitle, activeS
               )}
             </div>
           )}
+
+          {/* Scoped document indicator */}
+          {scopedDocumentName && (
+            <div className="flex items-center gap-1.5 ml-2 px-2.5 py-1 bg-primary/5 border border-primary/20 rounded-full">
+              <FileSearch className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-medium text-primary truncate max-w-[160px]">
+                {scopedDocumentName}
+              </span>
+            </div>
+          )}
         </div>
         
         {role === 'admin' && (
@@ -122,23 +137,39 @@ export function ChatArea({ messages, onSend, onRegenerate, sessionTitle, activeS
         )}
       </header>
 
-      {/* Messages Area */}
+      {/* Messages Area or Empty State */}
       <div className="flex-1 overflow-y-auto bg-white py-6">
-        {/* Time Divider */}
-        <div className="text-center mb-6">
-          <span className="text-xs text-gray-400 bg-white px-3">Today, 10:23 AM</span>
-        </div>
+        {isEmpty && !scopedDocumentName ? (
+          /* Empty state with document search */
+          <div className="flex flex-col items-center justify-center h-full px-4">
+            <img src={aksaraLogo} alt="AKSARA" className="w-16 h-16 object-contain mb-4 opacity-80" />
+            <h2 className="text-xl font-bold text-gray-700 mb-1">AKSARA RSCM</h2>
+            <p className="text-sm text-gray-400 mb-8 text-center max-w-md">
+              Search for a document to open it alongside the chat, or just type a question below.
+            </p>
+            {onOpenDocument && (
+              <DocumentSearch onSelectDocument={onOpenDocument} />
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Time Divider */}
+            <div className="text-center mb-6">
+              <span className="text-xs text-gray-400 bg-white px-3">Today, 10:23 AM</span>
+            </div>
 
-        {messages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            message={message}
-            onRegenerate={message.role === 'assistant' && onRegenerate ? () => onRegenerate(message.id) : undefined}
-          />
-        ))}
-        {/* Spacer to prevent input from hiding the last message */}
-        <div className="h-24 shrink-0" />
-        <div ref={bottomRef} />
+            {messages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                onRegenerate={message.role === 'assistant' && onRegenerate ? () => onRegenerate(message.id) : undefined}
+              />
+            ))}
+            {/* Spacer to prevent input from hiding the last message */}
+            <div className="h-24 shrink-0" />
+            <div ref={bottomRef} />
+          </>
+        )}
       </div>
 
       {/* Floating Input Area */}
