@@ -6,6 +6,7 @@ import type { Message, SourceReference } from '@/types';
 import aksaraLogo from '@/assets/aksara-logo.png';
 // SourceCard unused, removed
 import { PdfPreviewModal } from './PdfPreviewModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface MessageBubbleProps {
   message: Message;
@@ -17,6 +18,18 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
   const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(null);
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
+  const { profile } = useAuth();
+
+  const getInitials = (name: string) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(' ').filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const initials = getInitials(profile?.full_name || '');
 
   const handleCopy = async () => {
     try {
@@ -78,8 +91,12 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
               )}
             </div>
           </div>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center shrink-0 text-xs font-bold text-white shadow-sm mt-5">
-            AN
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center shrink-0 text-xs font-bold text-white shadow-sm mt-5 overflow-hidden">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              initials
+            )}
           </div>
         </div>
       </div>

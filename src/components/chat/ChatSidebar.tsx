@@ -153,10 +153,10 @@ export function ChatSidebar({
           </p>
         )}
         {sessions.map((session) => (
-          <button
+          <div
             key={session.id}
             onClick={() => editingId !== session.id && onSelectSession(session.id)}
-            className={`w-full group flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-sm transition-all duration-150 mb-0.5 ${
+            className={`w-full group flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-sm transition-all duration-150 mb-0.5 cursor-pointer ${
               activeSessionId === session.id
                 ? 'bg-sidebar-active text-primary font-medium'
                 : 'text-gray-600 hover:bg-sidebar-hover'
@@ -225,7 +225,7 @@ export function ChatSidebar({
                 )}
               </>
             )}
-          </button>
+          </div>
         ))}
       </div>
 

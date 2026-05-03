@@ -1,8 +1,12 @@
 """
 AKSARA RSCM — Chat Sessions Router
 CRUD endpoints for managing chat sessions with user isolation.
+
+Performance: All sync Supabase SDK calls are wrapped in asyncio.to_thread()
+to prevent blocking the FastAPI event loop.
 """
 
+import asyncio
 from fastapi import APIRouter, HTTPException, Depends, status
 from models.schemas import SessionOut, SessionCreateRequest, MessageOut
 from services.supabase_client import get_supabase_client
@@ -16,13 +20,17 @@ router = APIRouter(prefix="/api/sessions", tags=["Sessions"])
 async def list_sessions(current_user: dict = Depends(get_current_user)):
     """List all chat sessions for the authenticated user, newest first."""
     client = get_supabase_client()
-    result = (
-        client.table("chat_sessions")
-        .select("*")
-        .eq("user_id", current_user["id"])
-        .order("created_at", desc=True)
-        .execute()
+
+    result = await asyncio.to_thread(
+        lambda: (
+            client.table("chat_sessions")
+            .select("*")
+            .eq("user_id", current_user["id"])
+            .order("created_at", desc=True)
+            .execute()
+        )
     )
+
     return [
         SessionOut(
             id=str(s["id"]),
@@ -42,10 +50,13 @@ async def create_session(
 ):
     """Create a new chat session for the authenticated user."""
     client = get_supabase_client()
-    result = (
-        client.table("chat_sessions")
-        .insert({"user_id": current_user["id"], "title": body.title})
-        .execute()
+
+    result = await asyncio.to_thread(
+        lambda: (
+            client.table("chat_sessions")
+            .insert({"user_id": current_user["id"], "title": body.title})
+            .execute()
+        )
     )
 
     if not result.data:
@@ -71,21 +82,25 @@ async def rename_session(
     client = get_supabase_client()
 
     # Verify ownership
-    check = (
-        client.table("chat_sessions")
-        .select("id")
-        .eq("id", session_id)
-        .eq("user_id", current_user["id"])
-        .execute()
+    check = await asyncio.to_thread(
+        lambda: (
+            client.table("chat_sessions")
+            .select("id")
+            .eq("id", session_id)
+            .eq("user_id", current_user["id"])
+            .execute()
+        )
     )
     if not check.data:
         raise HTTPException(status_code=404, detail="Session not found.")
 
-    result = (
-        client.table("chat_sessions")
-        .update({"title": body.title})
-        .eq("id", session_id)
-        .execute()
+    result = await asyncio.to_thread(
+        lambda: (
+            client.table("chat_sessions")
+            .update({"title": body.title})
+            .eq("id", session_id)
+            .execute()
+        )
     )
 
     s = result.data[0]
@@ -103,21 +118,28 @@ async def delete_session(
     session_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Delete a chat session — only if it belongs to the current user."""
+    """Delete a chat session — only if it belongs to the current user.
+    
+    Optimized: combines ownership check + delete into a single query.
+    The delete with user_id filter ensures only the owner can delete.
+    """
     client = get_supabase_client()
 
-    # Verify ownership
-    check = (
-        client.table("chat_sessions")
-        .select("id")
-        .eq("id", session_id)
-        .eq("user_id", current_user["id"])
-        .execute()
+    # Single query: delete where id AND user_id match (enforces ownership)
+    result = await asyncio.to_thread(
+        lambda: (
+            client.table("chat_sessions")
+            .delete()
+            .eq("id", session_id)
+            .eq("user_id", current_user["id"])
+            .execute()
+        )
     )
-    if not check.data:
+
+    # If no rows were deleted, session didn't exist or didn't belong to user
+    if not result.data:
         raise HTTPException(status_code=404, detail="Session not found.")
 
-    client.table("chat_sessions").delete().eq("id", session_id).execute()
     return None
 
 
@@ -131,22 +153,26 @@ async def get_session_messages(
     client = get_supabase_client()
 
     # Verify ownership
-    check = (
-        client.table("chat_sessions")
-        .select("id")
-        .eq("id", session_id)
-        .eq("user_id", current_user["id"])
-        .execute()
+    check = await asyncio.to_thread(
+        lambda: (
+            client.table("chat_sessions")
+            .select("id")
+            .eq("id", session_id)
+            .eq("user_id", current_user["id"])
+            .execute()
+        )
     )
     if not check.data:
         raise HTTPException(status_code=404, detail="Session not found.")
 
-    result = (
-        client.table("chat_messages")
-        .select("*")
-        .eq("session_id", session_id)
-        .order("created_at", desc=False)
-        .execute()
+    result = await asyncio.to_thread(
+        lambda: (
+            client.table("chat_messages")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("created_at", desc=False)
+            .execute()
+        )
     )
 
     return [

@@ -4,6 +4,7 @@ import { ChatArea } from '@/components/chat/ChatArea';
 import { DocumentWorkspace } from '@/components/chat/DocumentWorkspace';
 import {
   sendChatMessage,
+  sendChatMessageStream,
   sendChatMessageMultimodal,
   fetchSessions,
   createSession,
@@ -13,15 +14,34 @@ import {
 } from '@/lib/api';
 import type { Message, ChatSession, DocumentSearchResult } from '@/types';
 
+// Simple memory cache to prevent reload delays when switching menus
+let cachedSessions: ChatSession[] | null = null;
+let cachedActiveSessionId: string | null = null;
+let cachedMessages: Record<string, Message[]> = {};
+let cachedActiveDocument: DocumentSearchResult | null = null;
+
 export function ChatPage() {
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [activeDocument, setActiveDocument] = useState<DocumentSearchResult | null>(null);
+  const [sessions, setSessions] = useState<ChatSession[]>(cachedSessions || []);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(cachedActiveSessionId);
+  const [messages, setMessages] = useState<Message[]>(
+    cachedActiveSessionId && cachedMessages[cachedActiveSessionId] ? cachedMessages[cachedActiveSessionId] : []
+  );
+  const [activeDocument, setActiveDocument] = useState<DocumentSearchResult | null>(cachedActiveDocument);
+
+  // ── Sync cache with state ──────────────────────────────
+  useEffect(() => { cachedSessions = sessions; }, [sessions]);
+  useEffect(() => { cachedActiveSessionId = activeSessionId; }, [activeSessionId]);
+  useEffect(() => { if (activeSessionId) cachedMessages[activeSessionId] = messages; }, [activeSessionId, messages]);
+  useEffect(() => { cachedActiveDocument = activeDocument; }, [activeDocument]);
 
   // ── Load sessions on mount ────────────────────────────
   useEffect(() => {
-    loadSessions();
+    if (!cachedSessions) {
+      loadSessions();
+    } else {
+      // Background sync to ensure data is fresh
+      fetchSessions().then((data) => setSessions(data)).catch(console.error);
+    }
   }, []);
 
   const loadSessions = async () => {
@@ -29,8 +49,8 @@ export function ChatPage() {
       const data = await fetchSessions();
       setSessions(data);
 
-      // Auto-select the most recent session, or create one if none exist
-      if (data.length > 0) {
+      // Auto-select the most recent session if none is active
+      if (data.length > 0 && !cachedActiveSessionId) {
         setActiveSessionId(data[0].id);
         await loadMessages(data[0].id);
       }
@@ -51,6 +71,7 @@ export function ChatPage() {
         attachmentName: m.attachment_name,
       }));
       setMessages(mapped);
+      cachedMessages[sessionId] = mapped; // Update cache immediately
     } catch (error) {
       console.error('[ChatPage] Failed to load messages:', error);
       setMessages([]);
@@ -74,33 +95,47 @@ export function ChatPage() {
     if (sessionId === activeSessionId) return;
     setActiveSessionId(sessionId);
     setActiveDocument(null); // Reset workspace when switching sessions
+
+    // Use cache immediately if available to prevent delay
+    if (cachedMessages[sessionId]) {
+      setMessages(cachedMessages[sessionId]);
+    } else {
+      setMessages([]); // Or keep previous briefly while loading
+    }
+
     await loadMessages(sessionId);
   }, [activeSessionId]);
 
   const handleDeleteSession = useCallback(async (sessionId: string) => {
+    // ── Optimistic UI: update state immediately, revert on error ──
+    const previousSessions = sessions;
+    const previousActiveId = activeSessionId;
+    const previousMessages = messages;
+
+    const remaining = sessions.filter((s) => s.id !== sessionId);
+    setSessions(remaining);
+
+    if (activeSessionId === sessionId) {
+      if (remaining.length > 0) {
+        setActiveSessionId(remaining[0].id);
+        loadMessages(remaining[0].id);
+      } else {
+        setActiveSessionId(null);
+        setMessages([]);
+      }
+      setActiveDocument(null);
+    }
+
     try {
       await deleteSession(sessionId);
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-
-      if (activeSessionId === sessionId) {
-        // Switch to the next available session or clear
-        setSessions((prev) => {
-          const remaining = prev.filter((s) => s.id !== sessionId);
-          if (remaining.length > 0) {
-            setActiveSessionId(remaining[0].id);
-            loadMessages(remaining[0].id);
-          } else {
-            setActiveSessionId(null);
-            setMessages([]);
-          }
-          return remaining;
-        });
-        setActiveDocument(null);
-      }
     } catch (error) {
+      // Revert on failure
       console.error('[ChatPage] Failed to delete session:', error);
+      setSessions(previousSessions);
+      setActiveSessionId(previousActiveId);
+      setMessages(previousMessages);
     }
-  }, [activeSessionId]);
+  }, [activeSessionId, sessions, messages]);
 
   const handleRenameSession = useCallback(async (sessionId: string, newTitle: string) => {
     try {
@@ -144,8 +179,9 @@ export function ChatPage() {
       attachmentName: file?.name,
     };
 
+    const assistantMessageId = (Date.now() + 1).toString();
     const loadingMessage: Message = {
-      id: (Date.now() + 1).toString(),
+      id: assistantMessageId,
       role: 'assistant',
       content: '',
       timestamp: new Date(),
@@ -158,25 +194,75 @@ export function ChatPage() {
     });
 
     try {
-      // Pass document_id if in workspace mode (scoped chat)
       const documentId = activeDocument?.id;
 
-      const response = file
-        ? await sendChatMessageMultimodal(content, sessionId, file)
-        : await sendChatMessage(content, sessionId, documentId);
+      if (file) {
+        // Multimodal: non-streaming (different model/path)
+        const response = await sendChatMessageMultimodal(content, sessionId, file);
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 2).toString(),
-        role: 'assistant',
-        content: response.answer,
-        timestamp: new Date(),
-        sources: response.sources,
-      };
+        const assistantMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          role: 'assistant',
+          content: response.answer,
+          timestamp: new Date(),
+          sources: response.sources,
+        };
 
-      setMessages((prev) => {
-        const filtered = prev.filter((m) => !m.isLoading);
-        return [...filtered, assistantMessage];
-      });
+        setMessages((prev) => {
+          const filtered = prev.filter((m) => !m.isLoading);
+          return [...filtered, assistantMessage];
+        });
+      } else {
+        // Text chat: use streaming for progressive token rendering
+        try {
+          const response = await sendChatMessageStream(
+            content,
+            sessionId,
+            // onToken: progressively update the assistant message content
+            (token) => {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, content: m.content + token, isLoading: false }
+                    : m
+                )
+              );
+            },
+            // onSources: attach sources as soon as they arrive
+            (sources) => {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId ? { ...m, sources } : m
+                )
+              );
+            },
+            documentId,
+          );
+
+          // Final update with complete answer (ensures consistency)
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId
+                ? { ...m, content: response.answer, sources: response.sources, isLoading: false }
+                : m
+            )
+          );
+        } catch {
+          // Fallback to non-streaming on error
+          const response = await sendChatMessage(content, sessionId, documentId);
+          const assistantMessage: Message = {
+            id: (Date.now() + 2).toString(),
+            role: 'assistant',
+            content: response.answer,
+            timestamp: new Date(),
+            sources: response.sources,
+          };
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => !m.isLoading);
+            return [...filtered, assistantMessage];
+          });
+        }
+      }
 
       // Refresh sessions to pick up title update
       const updatedSessions = await fetchSessions();

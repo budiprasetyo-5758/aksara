@@ -16,15 +16,21 @@ class Settings(BaseSettings):
     # ── Model Paths / HuggingFace ──────────────────────
     EMBEDDING_MODEL: str = "BAAI/bge-m3"
     RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
-    LLM_MODEL: str = "Qwen/Qwen2.5-7B-Instruct"
-    DOC_LLM_MODEL: str = "qwen/qwen3-32b"
-    VISION_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+
+    # ── LLM Models (OpenRouter) ───────────────────────
+    # Ganti model di sini sesuai kebutuhan. Lihat https://openrouter.ai/models
+    LLM_MODEL: str = "google/gemini-3.1-pro-preview"              # Chat RAG
+    DOC_LLM_MODEL: str = "google/gemini-3.1-pro-preview"                      # Document + Query rewriter
+    VISION_MODEL: str = "google/gemini-3.1-pro-preview"         # Vision / OCR
 
     # ── HuggingFace Inference API (optional) ───────────
     HF_API_TOKEN: str = ""
 
-    # ── Groq API ───────────
-    GROQ_API_KEY: str = ""
+    # ── OpenRouter API ───────────
+    OPENROUTER_API_KEY: str = ""
+
+    # ── Groq API (legacy, diganti OpenRouter) ───────────
+    # GROQ_API_KEY: str = ""
 
     # ── Jina AI API (Reranker) ───────────
     JINA_API_KEY: str = ""

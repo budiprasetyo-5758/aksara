@@ -68,6 +68,100 @@ export async function sendChatMessage(
   return response.json();
 }
 
+/**
+ * Streaming chat via SSE. Calls onToken for each received token,
+ * onSources when sources metadata arrives, and returns the full response.
+ */
+export async function sendChatMessageStream(
+  message: string,
+  sessionId: string,
+  onToken: (token: string) => void,
+  onSources?: (sources: SourceReference[], sessionId: string | null) => void,
+  documentId?: string,
+): Promise<ChatApiResponse> {
+  const token = await getAuthToken();
+  const body: Record<string, string> = { message, session_id: sessionId };
+  if (documentId) body.document_id = documentId;
+
+  const response = await fetch(`${API_BASE}/api/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(errorData.detail || `API error: ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let fullAnswer = '';
+  let sources: SourceReference[] = [];
+  let returnedSessionId: string | null = sessionId;
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // Parse SSE lines: each event is "data: {...}\n\n"
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data: ')) continue;
+
+      try {
+        const data = JSON.parse(trimmed.slice(6));
+
+        // Sources metadata event (sent first)
+        if (data.sources !== undefined) {
+          sources = data.sources || [];
+          returnedSessionId = data.session_id || sessionId;
+          if (onSources) onSources(sources, returnedSessionId);
+          continue;
+        }
+
+        // Token event
+        if (data.token) {
+          fullAnswer += data.token;
+          onToken(data.token);
+          continue;
+        }
+
+        // Done event with full answer
+        if (data.done) {
+          if (data.full_answer) fullAnswer = data.full_answer;
+          continue;
+        }
+
+        // Error event
+        if (data.error) {
+          throw new Error(data.error);
+        }
+      } catch (e) {
+        if (e instanceof SyntaxError) continue; // Skip malformed JSON
+        throw e;
+      }
+    }
+  }
+
+  return {
+    answer: fullAnswer,
+    sources,
+    session_id: returnedSessionId,
+  };
+}
+
 // ── Document Search ───────────────────────────────────
 
 export async function searchDocuments(query: string): Promise<DocumentSearchResult[]> {

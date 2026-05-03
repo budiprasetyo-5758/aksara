@@ -47,8 +47,8 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
 def embed_query(query: str) -> list[float]:
     """
-    Generate embedding for a single query.
-    Uses the instruction prefix recommended for bge-m3 retrieval.
+    Generate embedding for a single query (synchronous).
+    Used by background tasks and sync code paths.
 
     Args:
         query: The user's search query.
@@ -73,6 +73,37 @@ def embed_query(query: str) -> list[float]:
         response.raise_for_status()
         data = response.json().get("data", [])
         return data[0]["embedding"]
+
+
+async def embed_query_async(query: str) -> list[float]:
+    """
+    Generate embedding for a single query (async, non-blocking).
+    Used by the async RAG pipeline to avoid blocking the event loop.
+
+    Args:
+        query: The user's search query.
+
+    Returns:
+        1024-dimensional embedding vector.
+    """
+    import httpx
+
+    headers = {
+        "Authorization": f"Bearer {settings.JINA_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": settings.EMBEDDING_MODEL,
+        "input": [query]
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post("https://api.jina.ai/v1/embeddings", headers=headers, json=payload, timeout=30.0)
+        response.raise_for_status()
+        data = response.json().get("data", [])
+        return data[0]["embedding"]
+
 
 
 def store_embeddings_in_supabase(

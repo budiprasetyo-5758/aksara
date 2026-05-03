@@ -3,13 +3,16 @@ AKSARA RSCM — Retrieval & Reranking Service
 1. Query rewriting / expansion for short prompts
 2. Vector search in Supabase pgvector (top-K candidates)
 3. Cross-encoder reranking with BAAI/bge-reranker-v2-m3
+
+Performance: All network I/O is async to avoid blocking the event loop.
 """
 
+import asyncio
+import httpx
 from services.supabase_client import get_supabase_client
-from services.embedder import embed_query
+from services.embedder import embed_query_async
 from models.schemas import SourceReference, BoundingBox
 from config import settings
-import httpx
 
 
 # ── Query Rewriting ────────────────────────────────────
@@ -38,10 +41,11 @@ Aturan:
 6. Jika query sudah cukup detail, kembalikan query asli tanpa perubahan."""
 
 
-def rewrite_query(raw_query: str) -> str:
+async def rewrite_query(raw_query: str) -> str:
     """
     Rewrite a short/vague user query into a detailed semantic search query
     using the LLM. Falls back to the original query on error.
+    Runs the sync OpenAI call in a thread to avoid blocking.
     """
     # Skip rewriting for very long or detailed queries
     if len(raw_query.split()) > 15:
@@ -51,19 +55,40 @@ def rewrite_query(raw_query: str) -> str:
         from services.generator import get_inference_client
 
         client = get_inference_client()
-        response = client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": QUERY_REWRITER_PROMPT},
-                {"role": "user", "content": raw_query},
-            ],
-            model=settings.DOC_LLM_MODEL,
-            max_tokens=200,
-            temperature=0.1,
+
+        # Wrap sync OpenAI call in a thread
+        response = await asyncio.to_thread(
+            lambda: client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": QUERY_REWRITER_PROMPT},
+                    {"role": "user", "content": raw_query},
+                ],
+                model=settings.DOC_LLM_MODEL,
+                max_tokens=1024,
+                temperature=0.1,
+            )
         )
         rewritten = response.choices[0].message.content.strip()
-        if rewritten:
-            print(f"[QueryRewriter] '{raw_query}' → '{rewritten}'")
-            return rewritten
+
+        # ── Sanity checks: reject bad rewrites ────────────
+        if not rewritten:
+            print(f"[QueryRewriter] Empty result, using original query")
+            return raw_query
+
+        # Reject if rewritten is shorter than original (likely truncated)
+        if len(rewritten) < len(raw_query) * 0.8:
+            print(f"[QueryRewriter] Rewrite too short ({len(rewritten)} < {len(raw_query)}), using original: '{rewritten}'")
+            return raw_query
+
+        # Reject if model switched to English or output meta-instructions
+        bad_patterns = ["draft", "expanded query", "here is", "the query", "rewritten query"]
+        if any(p in rewritten.lower() for p in bad_patterns):
+            print(f"[QueryRewriter] Rewrite contains meta-text, using original: '{rewritten}'")
+            return raw_query
+        # ──────────────────────────────────────────────────
+
+        print(f"[QueryRewriter] '{raw_query}' -> '{rewritten}'")
+        return rewritten
     except Exception as e:
         print(f"[QueryRewriter] Failed, using original query: {e}")
 
@@ -72,49 +97,45 @@ def rewrite_query(raw_query: str) -> str:
 
 # ── Vector Retrieval ───────────────────────────────────
 
-def retrieve_relevant_chunks(query: str, document_id: str | None = None) -> list[dict]:
+async def retrieve_relevant_chunks(query: str, document_id: str | None = None) -> list[dict]:
     """
     Perform vector similarity search in Supabase and return top-K candidates.
     When document_id is provided, restricts results to chunks from that document.
-
-    Args:
-        query: The user's search query.
-        document_id: Optional ID to scope search to a specific document.
-
-    Returns:
-        List of chunk dicts with content, metadata, and similarity score.
+    Wraps sync Supabase RPC in a thread.
     """
     client = get_supabase_client()
-    query_embedding = embed_query(query)
+    query_embedding = await embed_query_async(query)
 
     if document_id:
-        # Scoped search — only chunks from the specified document
-        response = client.rpc(
-            "match_document_chunks_by_id",
-            {
-                "query_embedding": query_embedding,
-                "filter_document_id": document_id,
-                "match_threshold": 0.3,  # Lower threshold for scoped search
-                "match_count": settings.TOP_K_RETRIEVAL,
-            },
-        ).execute()
+        response = await asyncio.to_thread(
+            lambda: client.rpc(
+                "match_document_chunks_by_id",
+                {
+                    "query_embedding": query_embedding,
+                    "filter_document_id": document_id,
+                    "match_threshold": 0.3,
+                    "match_count": settings.TOP_K_RETRIEVAL,
+                },
+            ).execute()
+        )
     else:
-        # Global search across all active documents
-        response = client.rpc(
-            "match_document_chunks",
-            {
-                "query_embedding": query_embedding,
-                "match_threshold": settings.SIMILARITY_THRESHOLD,
-                "match_count": settings.TOP_K_RETRIEVAL,
-            },
-        ).execute()
+        response = await asyncio.to_thread(
+            lambda: client.rpc(
+                "match_document_chunks",
+                {
+                    "query_embedding": query_embedding,
+                    "match_threshold": settings.SIMILARITY_THRESHOLD,
+                    "match_count": settings.TOP_K_RETRIEVAL,
+                },
+            ).execute()
+        )
 
     return response.data or []
 
 
-def rerank_chunks(query: str, chunks: list[dict]) -> list[dict]:
+async def rerank_chunks(query: str, chunks: list[dict]) -> list[dict]:
     """
-    Re-rank retrieved chunks using the bge-reranker-v2-m3 cross-encoder.
+    Re-rank retrieved chunks using the Jina reranker cross-encoder (async).
 
     Args:
         query: The user's search query.
@@ -139,8 +160,13 @@ def rerank_chunks(query: str, chunks: list[dict]) -> list[dict]:
     }
     
     try:
-        with httpx.Client() as client:
-            response = client.post("https://api.jina.ai/v1/rerank", headers=headers, json=payload, timeout=30.0)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.jina.ai/v1/rerank",
+                headers=headers,
+                json=payload,
+                timeout=30.0
+            )
             response.raise_for_status()
             results = response.json().get("results", [])
             
@@ -157,30 +183,52 @@ def rerank_chunks(query: str, chunks: list[dict]) -> list[dict]:
     return ranked[: settings.TOP_K_RERANK]
 
 
-def retrieve_and_rerank(query: str, document_id: str | None = None) -> tuple[list[dict], list[SourceReference]]:
+async def retrieve_and_rerank(query: str, document_id: str | None = None) -> tuple[list[dict], list[SourceReference]]:
     """
     Full retrieval pipeline: query rewriting → vector search → reranking → source references.
+    All steps are async to avoid blocking the event loop.
 
     Args:
         query: The user's search query.
         document_id: Optional ID to scope search to a specific document.
-        file_url: Optional URL to scope search to a specific document.
 
     Returns:
         Tuple of (reranked_chunks, source_references).
     """
     # Step 0: Rewrite/expand the query for better retrieval
-    rewritten_query = rewrite_query(query)
+    rewritten_query = await rewrite_query(query)
 
     # Step 1: Vector search (scoped if document_id is provided)
-    candidates = retrieve_relevant_chunks(rewritten_query, document_id=document_id)
+    candidates = await retrieve_relevant_chunks(rewritten_query, document_id=document_id)
 
     # Step 2: Cross-encoder reranking (using rewritten query)
-    top_chunks = rerank_chunks(rewritten_query, candidates)
+    top_chunks = await rerank_chunks(rewritten_query, candidates)
 
     # Step 3: Build source references for frontend
+    # Batch-fetch missing file_names to eliminate N+1 queries
     sources: list[SourceReference] = []
     seen_contents = set()
+
+    # Collect chunks missing file_name metadata
+    missing_doc_ids = []
+    for chunk in top_chunks:
+        metadata = chunk.get("metadata") or {}
+        if "file_name" not in metadata:
+            missing_doc_ids.append(chunk["document_id"])
+
+    # Single batch query for all missing file_names
+    doc_name_map: dict[str, str] = {}
+    if missing_doc_ids:
+        unique_ids = list(set(str(did) for did in missing_doc_ids))
+        client = get_supabase_client()
+        docs_resp = await asyncio.to_thread(
+            lambda: client.table("documents")
+            .select("id, file_name")
+            .in_("id", unique_ids)
+            .execute()
+        )
+        if docs_resp.data:
+            doc_name_map = {str(d["id"]): d["file_name"] for d in docs_resp.data}
 
     for chunk in top_chunks:
         content = chunk.get("content", "")
@@ -189,22 +237,13 @@ def retrieve_and_rerank(query: str, document_id: str | None = None) -> tuple[lis
             continue
         seen_contents.add(content)
         
-        # Extract metadata if available, otherwise fallback
+        # Extract metadata if available, otherwise use batch-fetched fallback
         metadata = chunk.get("metadata") or {}
         
         if "file_name" in metadata:
             file_name = metadata["file_name"]
         else:
-            # Fallback for old chunks without metadata
-            client = get_supabase_client()
-            doc_response = (
-                client.table("documents")
-                .select("file_name")
-                .eq("id", chunk["document_id"])
-                .single()
-                .execute()
-            )
-            file_name = doc_response.data.get("file_name", "Unknown") if doc_response.data else "Unknown"
+            file_name = doc_name_map.get(str(chunk["document_id"]), "Unknown")
 
         sources.append(
             SourceReference(
@@ -222,4 +261,3 @@ def retrieve_and_rerank(query: str, document_id: str | None = None) -> tuple[lis
         )
 
     return top_chunks, sources
-
