@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 512          # tokens per chunk
     CHUNK_OVERLAP: int = 50        # overlapping tokens
     TOP_K_RETRIEVAL: int = 20      # initial retrieval candidates
-    TOP_K_RERANK: int = 3          # after reranking (reduced to avoid Groq TPM limit)
-    SIMILARITY_THRESHOLD: float = 0.5
+    TOP_K_RERANK: int = 5          # after reranking (increased for better reasoning context)
+    SIMILARITY_THRESHOLD: float = 0.4
 
     # ── CORS ───────────────────────────────────────────
     CORS_ORIGINS: list[str] = [
