@@ -7,7 +7,6 @@ import {
   FolderKanban,
   X,
   FileUp,
-  Loader2,
 } from 'lucide-react';
 import { uploadDocument, fetchClassifications } from '@/lib/api';
 import type { Classification } from '@/types';
