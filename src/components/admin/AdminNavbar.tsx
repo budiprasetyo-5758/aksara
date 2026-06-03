@@ -4,6 +4,7 @@ import aksaraLogo from '@/assets/aksara-logo.png';
 
 const navLinks = [
   { label: 'Documents', path: '/admin' },
+  { label: 'Classifications', path: '/admin/classifications' },
   { label: 'Users', path: '/admin/users' },
 ];
 

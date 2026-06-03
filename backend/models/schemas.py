@@ -45,6 +45,8 @@ class DocumentOut(BaseModel):
     status: str
     is_active: bool
     total_pages: int
+    classification_id: str | None = None
+    classification_name: str | None = None
 
 
 class DocumentListResponse(BaseModel):
@@ -66,6 +68,15 @@ class DocumentSyncResponse(BaseModel):
     status: str
     chunks_processed: int
     message: str
+
+
+class DocumentClassifyRequest(BaseModel):
+    classification_id: str | None = None
+
+
+class BulkClassifyRequest(BaseModel):
+    document_ids: list[str]
+    classification_id: str | None = None
 
 
 # ── Chunk (internal) ────────────────────────────────────
@@ -113,3 +124,22 @@ class DocumentSearchResult(BaseModel):
     file_url: str
     file_type: str
     total_pages: int
+
+
+# ── Document Classifications ────────────────────────────
+class ClassificationOut(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class ClassificationCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class ClassificationUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None

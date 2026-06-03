@@ -6,7 +6,7 @@ Endpoints for uploading, listing, syncing, and deleting documents.
 import io
 import uuid
 from datetime import datetime
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, BackgroundTasks, Form
 from fastapi.responses import StreamingResponse
 from models.schemas import (
     DocumentOut,
@@ -14,6 +14,8 @@ from models.schemas import (
     DocumentUploadResponse,
     DocumentSyncResponse,
     DocumentSearchResult,
+    DocumentClassifyRequest,
+    BulkClassifyRequest,
     StatsResponse,
 )
 from services.supabase_client import get_supabase_client, get_authenticated_client
@@ -234,14 +236,19 @@ async def list_documents(
     page: int = 1,
     per_page: int = 50,
     status: str | None = None,
+    classification_id: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):
-    """List all documents with optional status filter and pagination."""
+    """List all documents with optional status/classification filter and pagination."""
     client = get_authenticated_client(current_user["access_token"])
-    query = client.table("documents").select("*", count="exact")
+    query = client.table("documents").select(
+        "*, document_classifications(name)", count="exact"
+    )
 
     if status:
         query = query.eq("status", status)
+    if classification_id:
+        query = query.eq("classification_id", classification_id)
 
     query = query.order("upload_date", desc=True)
     query = query.range((page - 1) * per_page, page * per_page - 1)
@@ -258,6 +265,12 @@ async def list_documents(
             status=d["status"],
             is_active=d["is_active"],
             total_pages=d.get("total_pages", 0),
+            classification_id=str(d["classification_id"]) if d.get("classification_id") else None,
+            classification_name=(
+                d["document_classifications"]["name"]
+                if d.get("document_classifications")
+                else None
+            ),
         )
         for d in (response.data or [])
     ]
@@ -275,6 +288,7 @@ async def list_documents(
 async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    classification_id: str | None = Form(None),
     admin_user: dict = Depends(require_admin),
 ):
     """Upload a document to Supabase Storage and create a metadata record."""
@@ -312,6 +326,8 @@ async def upload_document(
         "total_pages": total_pages,
         "storage_path": storage_path,
     }
+    if classification_id:
+        doc_data["classification_id"] = classification_id
 
     result = client.table("documents").insert(doc_data).execute()
     doc_id = result.data[0]["id"]
@@ -459,3 +475,76 @@ async def delete_document(
     client.table("documents").delete().eq("id", doc_id).execute()
 
     return {"message": "Document deleted successfully."}
+
+
+# ── Classify Document (assign/reassign) ────────────────
+@router.patch("/{doc_id}/classify")
+async def classify_document(
+    doc_id: str,
+    body: DocumentClassifyRequest,
+    admin_user: dict = Depends(require_admin),
+):
+    """Assign or reassign a classification to a document."""
+    client = get_authenticated_client(admin_user["access_token"])
+
+    doc = client.table("documents").select("id").eq("id", doc_id).single().execute()
+    if not doc.data:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    # Validate classification exists (if provided)
+    if body.classification_id:
+        cls = (
+            client.table("document_classifications")
+            .select("id")
+            .eq("id", body.classification_id)
+            .single()
+            .execute()
+        )
+        if not cls.data:
+            raise HTTPException(status_code=404, detail="Classification not found.")
+
+    client.table("documents").update(
+        {"classification_id": body.classification_id}
+    ).eq("id", doc_id).execute()
+
+    return {"id": doc_id, "classification_id": body.classification_id}
+
+
+# ── Bulk Classify Documents ────────────────────────────
+@router.post("/bulk-classify")
+async def bulk_classify_documents(
+    body: BulkClassifyRequest,
+    admin_user: dict = Depends(require_admin),
+):
+    """Assign a classification to multiple documents at once."""
+    if not body.document_ids:
+        raise HTTPException(status_code=400, detail="No document IDs provided.")
+
+    client = get_authenticated_client(admin_user["access_token"])
+
+    # Validate classification exists (if provided)
+    if body.classification_id:
+        cls = (
+            client.table("document_classifications")
+            .select("id")
+            .eq("id", body.classification_id)
+            .single()
+            .execute()
+        )
+        if not cls.data:
+            raise HTTPException(status_code=404, detail="Classification not found.")
+
+    updated_count = 0
+    for doc_id in body.document_ids:
+        try:
+            client.table("documents").update(
+                {"classification_id": body.classification_id}
+            ).eq("id", doc_id).execute()
+            updated_count += 1
+        except Exception:
+            pass  # Skip documents that don't exist
+
+    return {
+        "updated_count": updated_count,
+        "classification_id": body.classification_id,
+    }

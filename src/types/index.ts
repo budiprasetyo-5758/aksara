@@ -57,6 +57,8 @@ export interface Document {
   storage_path: string;
   created_at: string;
   updated_at: string;
+  classification_id: string | null;
+  classification_name: string | null;
 }
 
 export interface DocumentChunk {
@@ -93,4 +95,13 @@ export interface DocumentSearchResult {
   file_url: string;
   file_type: string;
   total_pages: number;
+}
+
+// ── Classification Types ────────────────────────────────
+export interface Classification {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
 }

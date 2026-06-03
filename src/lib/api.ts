@@ -192,7 +192,8 @@ export async function fetchDocuments(
 
 export function uploadDocument(
   file: File,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  classificationId?: string,
 ): Promise<{
   id: string;
   file_name: string;
@@ -204,6 +205,9 @@ export function uploadDocument(
       const token = await getAuthToken();
       const formData = new FormData();
       formData.append('file', file);
+      if (classificationId) {
+        formData.append('classification_id', classificationId);
+      }
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${API_BASE}/api/documents/upload`);
@@ -260,6 +264,33 @@ export async function toggleDocumentStatus(docId: string): Promise<{ id: string;
 
 export async function syncDocument(docId: string): Promise<void> {
   await authFetch(`/api/documents/${docId}/sync`, { method: 'POST' });
+}
+
+export async function classifyDocument(
+  docId: string,
+  classificationId: string | null,
+): Promise<{ id: string; classification_id: string | null }> {
+  const response = await authFetch(`/api/documents/${docId}/classify`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ classification_id: classificationId }),
+  });
+  return response.json();
+}
+
+export async function bulkClassifyDocuments(
+  documentIds: string[],
+  classificationId: string | null,
+): Promise<{ updated_count: number; classification_id: string | null }> {
+  const response = await authFetch('/api/documents/bulk-classify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      document_ids: documentIds,
+      classification_id: classificationId,
+    }),
+  });
+  return response.json();
 }
 
 // ── Stats ─────────────────────────────────────────────
@@ -337,4 +368,41 @@ export async function sendChatMessageMultimodal(
   }
 
   return response.json();
+}
+
+// ── Classifications ───────────────────────────────────
+
+import type { Classification } from '@/types';
+
+export async function fetchClassifications(): Promise<Classification[]> {
+  const response = await authFetch('/api/classifications/');
+  return response.json();
+}
+
+export async function createClassification(data: {
+  name: string;
+  description?: string;
+}): Promise<Classification> {
+  const response = await authFetch('/api/classifications/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return response.json();
+}
+
+export async function updateClassification(
+  id: string,
+  data: { name?: string; description?: string },
+): Promise<Classification> {
+  const response = await authFetch(`/api/classifications/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return response.json();
+}
+
+export async function deleteClassification(id: string): Promise<void> {
+  await authFetch(`/api/classifications/${id}`, { method: 'DELETE' });
 }

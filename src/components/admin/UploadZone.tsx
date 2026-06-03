@@ -1,6 +1,7 @@
-import { useState, useRef, type DragEvent, type ChangeEvent } from 'react';
-import { Upload, FileText, CheckCircle2, XCircle } from 'lucide-react';
-import { uploadDocument } from '@/lib/api';
+import { useState, useRef, useEffect, type DragEvent, type ChangeEvent } from 'react';
+import { Upload, FileText, CheckCircle2, XCircle, ChevronDown } from 'lucide-react';
+import { uploadDocument, fetchClassifications } from '@/lib/api';
+import type { Classification } from '@/types';
 
 interface UploadStatus {
   fileName: string;
@@ -16,7 +17,16 @@ interface UploadZoneProps {
 export function UploadZone({ onUploadComplete }: UploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploads, setUploads] = useState<UploadStatus[]>([]);
+  const [classifications, setClassifications] = useState<Classification[]>([]);
+  const [selectedClassificationId, setSelectedClassificationId] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Load classifications on mount
+  useEffect(() => {
+    fetchClassifications()
+      .then(setClassifications)
+      .catch((err) => console.error('Failed to load classifications:', err));
+  }, []);
 
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
@@ -51,19 +61,23 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
       ]);
 
       try {
-        const result = await uploadDocument(file, (progress) => {
-          setUploads((prev) =>
-            prev.map((u) =>
-              u.fileName === file.name && u.status === 'uploading'
-                ? {
-                    ...u,
-                    progress,
-                    message: progress >= 90 ? 'Processing & indexing...' : `Uploading (${progress}%)...`,
-                  }
-                : u
-            )
-          );
-        });
+        const result = await uploadDocument(
+          file,
+          (progress) => {
+            setUploads((prev) =>
+              prev.map((u) =>
+                u.fileName === file.name && u.status === 'uploading'
+                  ? {
+                      ...u,
+                      progress,
+                      message: progress >= 90 ? 'Processing & indexing...' : `Uploading (${progress}%)...`,
+                    }
+                  : u
+              )
+            );
+          },
+          selectedClassificationId || undefined,
+        );
 
         // Mark as done
         setUploads((prev) =>
@@ -93,6 +107,29 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
 
   return (
     <div className="mb-6">
+      {/* Classification Picker */}
+      <div className="mb-3">
+        <label htmlFor="upload-classification" className="block text-xs font-medium text-gray-500 mb-1.5">
+          Klasifikasi Dokumen
+        </label>
+        <div className="relative w-72">
+          <select
+            id="upload-classification"
+            value={selectedClassificationId}
+            onChange={(e) => setSelectedClassificationId(e.target.value)}
+            className="w-full appearance-none px-4 py-2.5 pr-10 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all cursor-pointer"
+          >
+            <option value="">— Belum Diklasifikasi —</option>
+            {classifications.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        </div>
+      </div>
+
       {/* Drop Zone */}
       <div
         onDragOver={handleDragOver}

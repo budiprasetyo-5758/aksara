@@ -5,6 +5,7 @@ import { AdminNavbar } from '@/components/admin/AdminNavbar';
 import { UploadZone } from '@/components/admin/UploadZone';
 import { DocumentTable } from '@/components/admin/DocumentTable';
 import { UserManagement } from '@/components/admin/UserManagement';
+import { ClassificationManagement } from '@/components/admin/ClassificationManagement';
 import { fetchStats } from '@/lib/api';
 
 interface StatsData {
@@ -140,6 +141,7 @@ export function AdminPage() {
         <Routes>
           <Route index element={<DocumentsView />} />
           <Route path="documents" element={<DocumentsView />} />
+          <Route path="classifications" element={<ClassificationManagement />} />
           <Route path="users" element={<UserManagement />} />
         </Routes>
       </main>
