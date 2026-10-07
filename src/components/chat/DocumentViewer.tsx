@@ -28,7 +28,7 @@ export function DocumentViewer({ document, onClose }: DocumentViewerProps) {
 
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) {
-          setError('Not authenticated');
+          setError('Sesi Anda berakhir. Silakan masuk kembali.');
           return;
         }
 
@@ -39,14 +39,14 @@ export function DocumentViewer({ document, onClose }: DocumentViewerProps) {
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to load document (${response.status})`);
+          throw new Error(`Gagal memuat dokumen (${response.status})`);
         }
 
         const blob = await response.blob();
         blobUrl = URL.createObjectURL(blob);
         setPdfBlobUrl(blobUrl);
       } catch (err: any) {
-        setError(err.message || 'Failed to load document');
+        setError(err.message || 'Gagal memuat dokumen');
       } finally {
         setIsLoading(false);
       }
@@ -60,7 +60,7 @@ export function DocumentViewer({ document, onClose }: DocumentViewerProps) {
   }, [document.id]);
 
   return (
-    <div className={`flex flex-col h-full bg-white border-r border-gray-200 transition-all duration-300 ${isExpanded ? 'absolute inset-0 z-30' : 'relative'}`}>
+    <div className={`flex flex-col h-full bg-white transition-all duration-300 ${isExpanded ? 'absolute inset-0 z-30' : 'relative'}`}>
       {/* Header */}
       <div className="h-14 min-h-[56px] border-b border-gray-200 flex items-center justify-between px-4 shrink-0 bg-white">
         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -70,7 +70,7 @@ export function DocumentViewer({ document, onClose }: DocumentViewerProps) {
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-gray-800 truncate">{document.file_name}</h3>
             <p className="text-[10px] text-gray-400 uppercase tracking-wider">
-              {document.file_type} · {document.total_pages} pages
+              {document.file_type} · {document.total_pages} halaman
             </p>
           </div>
         </div>
@@ -80,22 +80,22 @@ export function DocumentViewer({ document, onClose }: DocumentViewerProps) {
             href={document.file_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
-            title="Open in new tab"
+            className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Buka di tab baru"
           >
             <ExternalLink className="w-4 h-4" />
           </a>
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
-            title={isExpanded ? "Collapse" : "Expand"}
+            className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title={isExpanded ? "Perkecil" : "Perbesar"}
           >
             {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
           <button
             onClick={onClose}
             className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-            title="Close document"
+            title="Tutup dokumen"
           >
             <X className="w-4 h-4" />
           </button>
@@ -108,7 +108,7 @@ export function DocumentViewer({ document, onClose }: DocumentViewerProps) {
           <div className="absolute inset-0 flex items-center justify-center z-10 bg-white">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
-              <p className="text-sm text-gray-400">Loading document...</p>
+              <p className="text-sm text-gray-400">Memuat dokumen…</p>
             </div>
           </div>
         )}
@@ -116,15 +116,15 @@ export function DocumentViewer({ document, onClose }: DocumentViewerProps) {
           <div className="absolute inset-0 flex items-center justify-center z-10 bg-white">
             <div className="flex flex-col items-center gap-3 text-center px-8">
               <AlertCircle className="w-10 h-10 text-red-400" />
-              <p className="text-sm text-gray-600 font-medium">Failed to load document</p>
+              <p className="text-sm text-gray-600 font-medium">Gagal memuat dokumen</p>
               <p className="text-xs text-gray-400">{error}</p>
               <a
                 href={document.file_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-primary hover:underline mt-2"
+                className="text-xs font-medium text-primary-ink hover:underline mt-2"
               >
-                Open in new tab instead →
+                Buka di tab baru →
               </a>
             </div>
           </div>

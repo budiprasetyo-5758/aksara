@@ -27,6 +27,8 @@ export function ChatPage() {
     cachedActiveSessionId && cachedMessages[cachedActiveSessionId] ? cachedMessages[cachedActiveSessionId] : []
   );
   const [activeDocument, setActiveDocument] = useState<DocumentSearchResult | null>(cachedActiveDocument);
+  const [isSending, setIsSending] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // mobile drawer
 
   // ── Sync cache with state ──────────────────────────────
   useEffect(() => { cachedSessions = sessions; }, [sessions]);
@@ -157,6 +159,16 @@ export function ChatPage() {
   }, []);
 
   const handleSend = async (content: string, file?: File) => {
+    if (isSending) return;
+    setIsSending(true);
+    try {
+      await sendMessage(content, file);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const sendMessage = async (content: string, file?: File) => {
     // If no active session, create one first
     let sessionId = activeSessionId;
     if (!sessionId) {
@@ -271,7 +283,7 @@ export function ChatPage() {
       const errorMessage: Message = {
         id: (Date.now() + 2).toString(),
         role: 'assistant',
-        content: `⚠️ **Error:** ${error.message || 'Failed to get response from server.'}\n\nPastikan backend sedang berjalan (\`uvicorn main:app --reload --port 8000\`).`,
+        content: `⚠️ **Terjadi kesalahan saat menghubungi server.** Silakan coba lagi.\n\n_Detail: ${error.message || 'Tidak ada respons dari server.'}_`,
         timestamp: new Date(),
       };
 
@@ -285,6 +297,8 @@ export function ChatPage() {
   // Get active session title
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
+  const openSidebar = () => setIsSidebarOpen(true);
+
   return (
     <div className="flex fixed inset-0 overflow-hidden bg-white">
       <ChatSidebar
@@ -294,6 +308,8 @@ export function ChatPage() {
         onNewChat={handleNewChat}
         onDeleteSession={handleDeleteSession}
         onRenameSession={handleRenameSession}
+        mobileOpen={isSidebarOpen}
+        onMobileClose={() => setIsSidebarOpen(false)}
       />
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
         {activeDocument ? (
@@ -302,18 +318,22 @@ export function ChatPage() {
             messages={messages}
             onSend={handleSend}
             onClose={handleCloseDocument}
-            sessionTitle={activeSession?.title || 'New Chat'}
+            sessionTitle={activeSession?.title}
             activeSessionId={activeSessionId}
             onRenameSession={handleRenameSession}
+            isSending={isSending}
+            onOpenSidebar={openSidebar}
           />
         ) : (
           <ChatArea
             messages={messages}
             onSend={handleSend}
-            sessionTitle={activeSession?.title || 'New Chat'}
+            sessionTitle={activeSession?.title}
             activeSessionId={activeSessionId}
             onRenameSession={handleRenameSession}
             onOpenDocument={handleOpenDocument}
+            isSending={isSending}
+            onOpenSidebar={openSidebar}
           />
         )}
       </div>

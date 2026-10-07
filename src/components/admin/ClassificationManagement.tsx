@@ -108,6 +108,7 @@ function ClassificationModal({
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+            aria-label="Tutup"
           >
             <X className="w-4 h-4" />
           </button>
@@ -125,7 +126,7 @@ function ClassificationModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Contoh: Dokumen kebijakan"
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
               required
               autoFocus
             />
@@ -141,7 +142,7 @@ function ClassificationModal({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Contoh: Perdir, SPO, surat keputusan, pedoman internal"
               rows={3}
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none"
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all resize-none"
             />
           </div>
 
@@ -157,7 +158,7 @@ function ClassificationModal({
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primary-dark rounded-xl transition-colors flex items-center gap-2 disabled:opacity-60"
+              className="px-5 py-2.5 text-sm font-medium text-white bg-primary-dark hover:bg-primary-ink rounded-xl transition-colors flex items-center gap-2 disabled:opacity-60"
               disabled={isLoading || !name.trim()}
             >
               {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -324,7 +325,7 @@ export function ClassificationManagement() {
   return (
     <>
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Klasifikasi Dokumen</h1>
           <p className="text-sm text-gray-500">
@@ -333,7 +334,7 @@ export function ClassificationManagement() {
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow-md"
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary-dark hover:bg-primary-ink text-white rounded-xl text-sm font-medium transition-colors shrink-0"
         >
           <Plus className="w-4 h-4" />
           Tambah Klasifikasi
@@ -357,7 +358,7 @@ export function ClassificationManagement() {
             <p className="text-sm text-red-600 font-medium">{error}</p>
             <button
               onClick={loadClassifications}
-              className="text-sm text-primary hover:text-primary-dark font-medium"
+              className="text-sm text-primary-ink hover:underline font-medium"
             >
               Coba lagi
             </button>
@@ -377,17 +378,18 @@ export function ClassificationManagement() {
         </div>
       ) : (
         /* Table */
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-          <table className="w-full">
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px]">
             <thead>
-              <tr className="bg-gray-900 text-white">
-                <th className="text-left px-6 py-4 text-sm font-semibold tracking-wide w-[35%]">
+              <tr className="border-b border-gray-100">
+                <th className="text-left px-6 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider w-[35%]">
                   Jenis Referensi
                 </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold tracking-wide">
+                <th className="text-left px-6 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">
                   Contoh
                 </th>
-                <th className="text-right px-6 py-4 text-sm font-semibold tracking-wide w-[120px]">
+                <th className="text-right px-6 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider w-[120px]">
                   Aksi
                 </th>
               </tr>
@@ -403,7 +405,7 @@ export function ClassificationManagement() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <FolderKanban className="w-4 h-4 text-primary" />
+                        <FolderKanban className="w-4 h-4 text-primary-ink" />
                       </div>
                       <span className="text-sm font-medium text-gray-900">{c.name}</span>
                     </div>
@@ -414,11 +416,12 @@ export function ClassificationManagement() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => setEditTarget(c)}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-all"
-                        title="Edit"
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-primary-ink hover:bg-primary/10 transition-all"
+                        title="Ubah"
+                        aria-label={`Ubah klasifikasi ${c.name}`}
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
@@ -426,6 +429,7 @@ export function ClassificationManagement() {
                         onClick={() => setDeleteTarget(c)}
                         className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all"
                         title="Hapus"
+                        aria-label={`Hapus klasifikasi ${c.name}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -435,6 +439,7 @@ export function ClassificationManagement() {
               ))}
             </tbody>
           </table>
+          </div>
 
           {/* Footer */}
           <div className="px-6 py-3 bg-gray-50 border-t border-gray-100">
@@ -457,7 +462,7 @@ export function ClassificationManagement() {
       {/* Edit Modal */}
       <ClassificationModal
         isOpen={!!editTarget}
-        title="Edit Klasifikasi"
+        title="Ubah Klasifikasi"
         initialName={editTarget?.name || ''}
         initialDescription={editTarget?.description || ''}
         isLoading={isSubmitting}

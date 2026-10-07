@@ -11,6 +11,8 @@ from fastapi.responses import StreamingResponse
 from models.schemas import (
     DocumentOut,
     DocumentListResponse,
+    ClassificationSummary,
+    DocumentSummaryResponse,
     DocumentUploadResponse,
     DocumentSyncResponse,
     DocumentSearchResult,
@@ -230,6 +232,47 @@ async def get_stats(
     )
 
 
+# ── Classification Summary (card counts) ──────────────
+SUMMARY_BATCH_SIZE = 1000
+
+
+@router.get("/summary", response_model=DocumentSummaryResponse)
+async def get_document_summary(
+    current_user: dict = Depends(get_current_user),
+):
+    """Count documents, indexed documents, and pages per classification."""
+    client = get_authenticated_client(current_user["access_token"])
+
+    # Fetch in batches until empty — PostgREST caps rows per request (max-rows),
+    # so a single select would silently undercount large libraries.
+    rows: list[dict] = []
+    while True:
+        batch = (
+            client.table("documents")
+            .select("classification_id, status, total_pages")
+            .order("id")
+            .range(len(rows), len(rows) + SUMMARY_BATCH_SIZE - 1)
+            .execute()
+        ).data or []
+        if not batch:
+            break
+        rows.extend(batch)
+
+    groups: dict[str | None, ClassificationSummary] = {}
+    for d in rows:
+        key = str(d["classification_id"]) if d.get("classification_id") else None
+        group = groups.setdefault(key, ClassificationSummary(classification_id=key))
+        group.document_count += 1
+        group.total_pages += d.get("total_pages") or 0
+        if d["status"] == "indexed":
+            group.indexed_count += 1
+
+    return DocumentSummaryResponse(
+        total_documents=len(rows),
+        groups=list(groups.values()),
+    )
+
+
 # ── List Documents ─────────────────────────────────────
 @router.get("/", response_model=DocumentListResponse)
 async def list_documents(
@@ -237,9 +280,14 @@ async def list_documents(
     per_page: int = 50,
     status: str | None = None,
     classification_id: str | None = None,
+    unclassified: bool = False,
+    search: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):
-    """List all documents with optional status/classification filter and pagination."""
+    """List documents with optional status/classification/file-name filters and pagination."""
+    page = max(page, 1)
+    per_page = min(max(per_page, 1), 100)
+
     client = get_authenticated_client(current_user["access_token"])
     query = client.table("documents").select(
         "*, document_classifications(name)", count="exact"
@@ -247,10 +295,15 @@ async def list_documents(
 
     if status:
         query = query.eq("status", status)
-    if classification_id:
+    if unclassified:
+        query = query.is_("classification_id", "null")
+    elif classification_id:
         query = query.eq("classification_id", classification_id)
+    if search and search.strip():
+        query = query.ilike("file_name", f"%{search.strip()}%")
 
-    query = query.order("upload_date", desc=True)
+    # Secondary sort on id keeps page boundaries stable when upload_date ties
+    query = query.order("upload_date", desc=True).order("id")
     query = query.range((page - 1) * per_page, page * per_page - 1)
 
     response = query.execute()

@@ -12,12 +12,19 @@ export function DocumentSearch({ onSelectDocument }: DocumentSearchProps) {
   const [results, setResults] = useState<DocumentSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    itemRefs.current[highlighted]?.scrollIntoView({ block: 'nearest' });
+  }, [highlighted]);
 
   const handleSearch = (value: string) => {
     setQuery(value);
@@ -25,32 +32,50 @@ export function DocumentSearch({ onSelectDocument }: DocumentSearchProps) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (value.trim().length < 2) {
+      requestRef.current++; // drop any in-flight response
       setResults([]);
       setHasSearched(false);
+      setIsSearching(false);
       return;
     }
 
     debounceRef.current = setTimeout(async () => {
+      const requestId = ++requestRef.current;
       setIsSearching(true);
       try {
         const data = await searchDocuments(value.trim());
+        if (requestId !== requestRef.current) return; // a newer query is in flight
         setResults(data);
+        setHighlighted(0);
         setHasSearched(true);
       } catch (err) {
+        if (requestId !== requestRef.current) return;
         console.error('[DocumentSearch] Error:', err);
         setResults([]);
         setHasSearched(true);
       } finally {
-        setIsSearching(false);
+        if (requestId === requestRef.current) setIsSearching(false);
       }
     }, 400);
   };
 
   const clearSearch = () => {
-    setQuery('');
-    setResults([]);
-    setHasSearched(false);
+    handleSearch('');
     inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (results.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlighted((i) => (i + 1) % results.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlighted((i) => (i - 1 + results.length) % results.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      onSelectDocument(results[highlighted]);
+    }
   };
 
   const getFileIcon = (fileType: string) => {
@@ -62,86 +87,83 @@ export function DocumentSearch({ onSelectDocument }: DocumentSearchProps) {
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4">
+    <div className="flex flex-col">
       {/* Search Input */}
-      <div className="relative">
-        <div className="flex items-center bg-white border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition-shadow overflow-hidden">
-          <div className="pl-5 text-gray-400">
-            {isSearching ? (
-              <Loader2 className="w-5 h-5 animate-spin text-primary" />
-            ) : (
-              <Search className="w-5 h-5" />
-            )}
-          </div>
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Search documents... (e.g. Kesehatan, PERDIR)"
-            className="flex-1 px-4 py-4 text-sm text-gray-700 placeholder:text-gray-400 bg-transparent border-0 focus:outline-none focus:ring-0"
-          />
-          {query && (
-            <button
-              onClick={clearSearch}
-              className="pr-4 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+      <div className="flex items-center gap-3 px-4 border-b border-gray-100">
+        {isSearching ? (
+          <Loader2 className="w-5 h-5 animate-spin text-primary shrink-0" />
+        ) : (
+          <Search className="w-5 h-5 text-gray-400 shrink-0" />
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => handleSearch(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Cari judul atau isi dokumen (mis. PERDIR, Kesehatan)"
+          className="flex-1 py-4 text-sm text-gray-800 placeholder:text-gray-400 bg-transparent border-0 focus:outline-none focus:ring-0"
+          aria-label="Cari dokumen"
+        />
+        {query && (
+          <button
+            onClick={clearSearch}
+            className="p-1 text-gray-400 hover:text-gray-600 rounded-md transition-colors"
+            aria-label="Hapus pencarian"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Results */}
-      {hasSearched && (
-        <div className="mt-4 space-y-2 max-h-[50vh] overflow-y-auto pr-1">
-          {results.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-sm">
-              No documents found for "<span className="font-medium text-gray-600">{query}</span>"
-            </div>
-          ) : (
-            <>
-              <p className="text-xs text-gray-400 mb-3 px-1">
-                {results.length} document{results.length !== 1 ? 's' : ''} found
-              </p>
-              {results.map((doc) => (
+      <div className="max-h-[60vh] overflow-y-auto p-2">
+        {!hasSearched ? (
+          <p className="px-3 py-8 text-center text-sm text-gray-400">
+            Ketik minimal 2 karakter untuk mencari berdasarkan judul atau isi dokumen.
+          </p>
+        ) : results.length === 0 ? (
+          <p className="px-3 py-8 text-center text-sm text-gray-400">
+            Tidak ada dokumen yang cocok dengan "<span className="font-medium text-gray-600">{query}</span>"
+          </p>
+        ) : (
+          <>
+            <p className="px-3 pt-1 pb-2 text-xs text-gray-400">
+              {results.length} dokumen ditemukan · gunakan ↑ ↓ lalu Enter
+            </p>
+            {results.map((doc, index) => {
+              const isHighlighted = index === highlighted;
+              return (
                 <button
                   key={doc.id}
+                  ref={(el) => { itemRefs.current[index] = el; }}
                   onClick={() => onSelectDocument(doc)}
-                  className="w-full flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-xl hover:border-primary/30 hover:bg-primary/[0.02] hover:shadow-md transition-all text-left group"
+                  onMouseEnter={() => setHighlighted(index)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${
+                    isHighlighted ? 'bg-primary/5' : ''
+                  }`}
                 >
-                  <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shrink-0 ${getFileIcon(doc.file_type)} group-hover:scale-105 transition-transform`}>
-                    <FileText className="w-6 h-6" />
+                  <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${getFileIcon(doc.file_type)}`}>
+                    <FileText className="w-4 h-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-800 truncate group-hover:text-primary transition-colors">
+                    <p className={`text-sm font-medium truncate ${isHighlighted ? 'text-primary-ink' : 'text-gray-800'}`}>
                       {doc.file_name}
                     </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] font-medium text-gray-400 uppercase">
-                        {doc.file_type}
-                      </span>
-                      {doc.total_pages > 0 && (
-                        <>
-                          <span className="text-gray-300">·</span>
-                          <span className="text-[11px] text-gray-400">
-                            {doc.total_pages} page{doc.total_pages !== 1 ? 's' : ''}
-                          </span>
-                        </>
-                      )}
-                    </div>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      <span className="uppercase">{doc.file_type}</span>
+                      {doc.total_pages > 0 && ` · ${doc.total_pages} halaman`}
+                    </p>
                   </div>
-                  <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-xs text-primary font-medium px-3 py-1.5 bg-primary/5 rounded-full">
-                      Open
-                    </span>
-                  </div>
+                  {isHighlighted && (
+                    <span className="text-xs font-medium text-primary-ink shrink-0">Buka ↵</span>
+                  )}
                 </button>
-              ))}
-            </>
-          )}
-        </div>
-      )}
+              );
+            })}
+          </>
+        )}
+      </div>
     </div>
   );
 }

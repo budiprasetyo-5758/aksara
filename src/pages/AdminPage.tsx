@@ -16,36 +16,37 @@ interface StatsData {
 }
 
 function formatStorage(bytes: number): string {
-  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
-  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
-  return `${(bytes / 1024).toFixed(0)} KB`;
+  const fmt = (n: number) => n.toLocaleString('id-ID', { maximumFractionDigits: 1 });
+  if (bytes >= 1073741824) return `${fmt(bytes / 1073741824)} GB`;
+  if (bytes >= 1048576) return `${fmt(bytes / 1048576)} MB`;
+  return `${Math.round(bytes / 1024)} KB`;
 }
 
 function StatsRow({ stats }: { stats: StatsData }) {
   const cards = [
     {
-      label: 'Total Documents',
-      value: stats.totalDocuments.toString(),
+      label: 'Total dokumen',
+      value: stats.totalDocuments.toLocaleString('id-ID'),
       icon: FileText,
-      color: 'text-primary',
+      color: 'text-primary-ink',
       bg: 'bg-primary/10',
     },
     {
-      label: 'Indexed Pages',
-      value: stats.indexedPages.toLocaleString(),
+      label: 'Halaman terindeks',
+      value: stats.indexedPages.toLocaleString('id-ID'),
       icon: Layers,
       color: 'text-amber-600',
       bg: 'bg-amber-50',
     },
     {
-      label: 'Active Status',
-      value: `${stats.activePercentage}%`,
+      label: 'Dokumen aktif',
+      value: `${stats.activePercentage.toLocaleString('id-ID')}%`,
       icon: CheckCircle2,
       color: 'text-emerald-600',
       bg: 'bg-emerald-50',
     },
     {
-      label: 'Storage Used',
+      label: 'Penyimpanan terpakai',
       value: formatStorage(stats.storageUsedBytes),
       icon: HardDrive,
       color: 'text-violet-600',
@@ -54,19 +55,19 @@ function StatsRow({ stats }: { stats: StatsData }) {
   ];
 
   return (
-    <div className="grid grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
       {cards.map((card) => {
         const Icon = card.icon;
         return (
           <div
             key={card.label}
-            className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3"
+            className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3"
           >
             <div className={`w-10 h-10 rounded-lg ${card.bg} flex items-center justify-center shrink-0`}>
               <Icon className={`w-5 h-5 ${card.color}`} />
             </div>
-            <div>
-              <p className="text-xs text-gray-500 font-medium">{card.label}</p>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 font-medium truncate">{card.label}</p>
               <p className="text-lg font-bold text-gray-900">{card.value}</p>
             </div>
           </div>
@@ -110,17 +111,19 @@ function DocumentsView() {
 
   return (
     <>
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Document Management</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Manajemen Dokumen</h1>
+          <p className="text-sm text-gray-500">Unggah, klasifikasikan, dan kelola dokumen referensi AKSARA.</p>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setRefreshTrigger((p) => p + 1)}
-            className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+            title="Muat ulang data"
           >
             <RefreshCw className="w-4 h-4" />
-            Refresh
+            <span className="hidden sm:inline">Muat ulang</span>
           </button>
         </div>
       </div>
@@ -137,7 +140,7 @@ export function AdminPage() {
     <div className="min-h-screen bg-gray-50">
       <AdminNavbar />
 
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <Routes>
           <Route index element={<DocumentsView />} />
           <Route path="documents" element={<DocumentsView />} />

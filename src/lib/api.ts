@@ -178,15 +178,47 @@ export interface DocumentListApiResponse {
   per_page: number;
 }
 
-export async function fetchDocuments(
-  page: number = 1,
-  perPage: number = 50,
-  status?: string,
-): Promise<DocumentListApiResponse> {
-  let url = `/api/documents/?page=${page}&per_page=${perPage}`;
-  if (status) url += `&status=${status}`;
+export interface DocumentListParams {
+  page?: number;
+  perPage?: number;
+  status?: string;
+  /** Classification to filter by; `null` = unclassified documents only. */
+  classificationId?: string | null;
+  /** Case-insensitive file-name match, applied server-side across all pages. */
+  search?: string;
+}
 
-  const response = await authFetch(url);
+export async function fetchDocuments({
+  page = 1,
+  perPage = 50,
+  status,
+  classificationId,
+  search,
+}: DocumentListParams = {}): Promise<DocumentListApiResponse> {
+  const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+  if (status) params.set('status', status);
+  if (classificationId === null) params.set('unclassified', 'true');
+  else if (classificationId) params.set('classification_id', classificationId);
+  if (search?.trim()) params.set('search', search.trim());
+
+  const response = await authFetch(`/api/documents/?${params}`);
+  return response.json();
+}
+
+export interface ClassificationSummary {
+  classification_id: string | null;
+  document_count: number;
+  indexed_count: number;
+  total_pages: number;
+}
+
+export interface DocumentSummaryApiResponse {
+  total_documents: number;
+  groups: ClassificationSummary[];
+}
+
+export async function fetchDocumentSummary(): Promise<DocumentSummaryApiResponse> {
+  const response = await authFetch('/api/documents/summary');
   return response.json();
 }
 

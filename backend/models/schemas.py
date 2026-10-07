@@ -56,6 +56,18 @@ class DocumentListResponse(BaseModel):
     per_page: int
 
 
+class ClassificationSummary(BaseModel):
+    classification_id: str | None = None  # None = unclassified
+    document_count: int = 0
+    indexed_count: int = 0
+    total_pages: int = 0
+
+
+class DocumentSummaryResponse(BaseModel):
+    total_documents: int
+    groups: list[ClassificationSummary]
+
+
 class DocumentUploadResponse(BaseModel):
     id: str
     file_name: str

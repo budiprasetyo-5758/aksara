@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ChatPage } from '@/pages/ChatPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { AuthPage } from '@/pages/AuthPage';
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
+import { PrivacyPolicyPage } from '@/pages/PrivacyPolicyPage';
 import { ProfileSettings } from '@/pages/ProfileSettings';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
@@ -39,6 +41,10 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
+          {/* Public: the reset email link signs the user in here, AuthPage would redirect away */}
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Public: required by Google for the OAuth consent screen */}
+          <Route path="/kebijakan-privasi" element={<PrivacyPolicyPage />} />
           
           <Route 
             path="/" 

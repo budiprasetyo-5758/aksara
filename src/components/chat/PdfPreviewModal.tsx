@@ -9,7 +9,7 @@ interface PdfPreviewModalProps {
 
 import { supabase } from '@/lib/supabase';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -35,15 +35,15 @@ export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
         const response = await fetch(url, { headers });
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            throw new Error(`Unauthorized (403). Session mungkin kedaluwarsa.`);
+            throw new Error(`Sesi Anda berakhir. Silakan masuk kembali.`);
           }
-          throw new Error(`Failed to load page image (${response.status})`);
+          throw new Error(`Gagal memuat halaman (${response.status})`);
         }
         const blob = await response.blob();
         const objectUrl = URL.createObjectURL(blob);
         setImageUrl(objectUrl);
       } catch (err: any) {
-        setError(err.message || 'Failed to load preview');
+        setError(err.message || 'Gagal memuat pratinjau');
       } finally {
         setLoading(false);
       }
@@ -123,7 +123,7 @@ export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
             <button
               onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
               className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
-              title="Zoom Out"
+              title="Perkecil"
             >
               <ZoomOut className="w-4 h-4" />
             </button>
@@ -133,7 +133,7 @@ export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
             <button
               onClick={() => setZoom(Math.min(3, zoom + 0.25))}
               className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
-              title="Zoom In"
+              title="Perbesar"
             >
               <ZoomIn className="w-4 h-4" />
             </button>
@@ -142,6 +142,8 @@ export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
             <button
               onClick={onClose}
               className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors ml-2"
+              title="Tutup"
+              aria-label="Tutup pratinjau"
             >
               <X className="w-5 h-5" />
             </button>
@@ -156,7 +158,7 @@ export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
           {loading && (
             <div className="flex flex-col items-center justify-center py-20 text-gray-400">
               <Loader2 className="w-8 h-8 animate-spin mb-3" />
-              <p className="text-sm">Loading page preview...</p>
+              <p className="text-sm">Memuat pratinjau halaman…</p>
             </div>
           )}
 
@@ -164,7 +166,6 @@ export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
             <div className="flex flex-col items-center justify-center py-20 text-gray-400">
               <FileText className="w-8 h-8 mb-3" />
               <p className="text-sm">{error}</p>
-              <p className="text-xs mt-1 text-gray-300">Backend mungkin belum aktif untuk endpoint ini</p>
             </div>
           )}
 
@@ -172,7 +173,7 @@ export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
             <div className="relative inline-block shadow-lg rounded-lg overflow-hidden">
               <img
                 src={imageUrl}
-                alt={`${source.file_name} — Page ${source.page_number}`}
+                alt={`${source.file_name} — Halaman ${source.page_number}`}
                 onLoad={handleImageLoad}
                 style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
                 className="block max-w-none"

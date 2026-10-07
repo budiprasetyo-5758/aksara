@@ -92,11 +92,11 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
     for (const file of files) {
       setUploads((prev) => [
         ...prev,
-        { fileName: file.name, progress: 0, status: 'uploading', message: 'Uploading...' },
+        { fileName: file.name, progress: 0, status: 'uploading', message: 'Mengunggah…' },
       ]);
 
       try {
-        const result = await uploadDocument(
+        await uploadDocument(
           file,
           (progress) => {
             setUploads((prev) =>
@@ -105,7 +105,7 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
                   ? {
                       ...u,
                       progress,
-                      message: progress >= 90 ? 'Processing & indexing...' : `Uploading (${progress}%)...`,
+                      message: progress >= 90 ? 'Memproses & mengindeks…' : `Mengunggah (${progress}%)…`,
                     }
                   : u
               )
@@ -117,7 +117,7 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
         setUploads((prev) =>
           prev.map((u) =>
             u.fileName === file.name
-              ? { ...u, progress: 100, status: 'done', message: result.message }
+              ? { ...u, progress: 100, status: 'done', message: 'Terunggah. Dokumen sedang diproses untuk pencarian.' }
               : u
           )
         );
@@ -125,8 +125,8 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
         onUploadComplete?.();
       } catch (err: any) {
         const errorMsg = err.message?.includes('Failed to fetch')
-          ? 'Cannot connect to backend server. Make sure the backend is running on port 8000.'
-          : err.message || 'Upload failed.';
+          ? 'Tidak dapat terhubung ke server. Silakan coba lagi beberapa saat lagi.'
+          : err.message || 'Gagal mengunggah dokumen.';
         setUploads((prev) =>
           prev.map((u) =>
             u.fileName === file.name && (u.status === 'uploading' || u.status === 'processing')
@@ -146,20 +146,31 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center cursor-pointer transition-all ${
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label="Unggah dokumen"
+        className={`border-2 border-dashed rounded-xl p-6 sm:p-10 flex flex-col items-center justify-center cursor-pointer transition-all bg-white focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 ${
           isDragging
             ? 'border-primary bg-primary/5'
-            : 'border-gray-300 hover:border-primary/50 hover:bg-gray-50'
+            : 'border-gray-300 hover:border-primary/50 hover:bg-primary/[0.02]'
         }`}
       >
         <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-          <Upload className="w-6 h-6 text-primary" />
+          <Upload className="w-6 h-6 text-primary-ink" />
         </div>
-        <p className="text-sm font-semibold text-gray-700 mb-1">Click to upload or drag and drop</p>
-        <p className="text-xs text-gray-400 text-center">
-          Supported formats: PDF, DOCX, TXT. Maximum file size 25MB.
+        <p className="text-sm font-semibold text-gray-700 mb-1 text-center">
+          <span className="text-primary-ink">Klik untuk memilih file</span> atau seret & lepas di sini
+        </p>
+        <p className="text-xs text-gray-500 text-center">
+          Format: PDF, DOCX, TXT · Maksimal 25 MB per file
           <br />
-          Files will be automatically processed for RAG indexing.
+          File akan otomatis diproses agar bisa dicari oleh AKSARA.
         </p>
         <input
           ref={inputRef}
@@ -190,16 +201,17 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-primary/5 to-transparent">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <FileUp className="w-5 h-5 text-primary" />
+                  <FileUp className="w-5 h-5 text-primary-ink" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-gray-900">Upload Dokumen</h3>
-                  <p className="text-xs text-gray-400">Pilih klasifikasi sebelum upload</p>
+                  <h3 className="text-base font-semibold text-gray-900">Unggah Dokumen</h3>
+                  <p className="text-xs text-gray-400">Pilih klasifikasi sebelum mengunggah</p>
                 </div>
               </div>
               <button
                 onClick={handleCancel}
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+                aria-label="Tutup"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -210,7 +222,7 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
               {/* File list preview */}
               <div className="mb-5">
                 <p className="text-xs font-medium text-gray-500 mb-2">
-                  {pendingFiles.length} file akan diupload:
+                  {pendingFiles.length} file akan diunggah:
                 </p>
                 <div className="max-h-[120px] overflow-y-auto space-y-1.5">
                   {pendingFiles.map((f, i) => (
@@ -225,8 +237,8 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
                         <p className="text-sm font-medium text-gray-700 truncate">{f.name}</p>
                         <p className="text-[11px] text-gray-400">
                           {f.size >= 1048576
-                            ? `${(f.size / 1048576).toFixed(1)} MB`
-                            : `${(f.size / 1024).toFixed(0)} KB`}
+                            ? `${(f.size / 1048576).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB`
+                            : `${Math.round(f.size / 1024)} KB`}
                         </p>
                       </div>
                     </div>
@@ -253,16 +265,16 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
                       selectedClassificationId === '' ? 'bg-primary/10' : 'bg-gray-100'
                     }`}>
                       <FolderKanban className={`w-4 h-4 ${
-                        selectedClassificationId === '' ? 'text-primary' : 'text-gray-400'
+                        selectedClassificationId === '' ? 'text-primary-ink' : 'text-gray-400'
                       }`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-medium ${
-                        selectedClassificationId === '' ? 'text-primary' : 'text-gray-600'
+                        selectedClassificationId === '' ? 'text-primary-ink' : 'text-gray-600'
                       }`}>
                         Belum Diklasifikasi
                       </p>
-                      <p className="text-[11px] text-gray-400">Upload tanpa klasifikasi</p>
+                      <p className="text-[11px] text-gray-400">Unggah tanpa klasifikasi</p>
                     </div>
                     {selectedClassificationId === '' && (
                       <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
@@ -286,12 +298,12 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
                         selectedClassificationId === c.id ? 'bg-primary/10' : 'bg-gray-100'
                       }`}>
                         <FolderKanban className={`w-4 h-4 ${
-                          selectedClassificationId === c.id ? 'text-primary' : 'text-gray-400'
+                          selectedClassificationId === c.id ? 'text-primary-ink' : 'text-gray-400'
                         }`} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium ${
-                          selectedClassificationId === c.id ? 'text-primary' : 'text-gray-700'
+                          selectedClassificationId === c.id ? 'text-primary-ink' : 'text-gray-700'
                         }`}>
                           {c.name}
                         </p>
@@ -320,10 +332,10 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
               </button>
               <button
                 onClick={handleConfirmUpload}
-                className="px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primary-dark rounded-xl transition-colors flex items-center gap-2"
+                className="px-5 py-2.5 text-sm font-medium text-white bg-primary-dark hover:bg-primary-ink rounded-xl transition-colors flex items-center gap-2"
               >
                 <Upload className="w-4 h-4" />
-                Upload {pendingFiles.length} File
+                Unggah {pendingFiles.length} file
               </button>
             </div>
           </div>
@@ -357,7 +369,7 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
               </div>
             </div>
             {upload.status !== 'error' && upload.status !== 'done' && (
-              <span className="text-sm font-semibold text-primary">{upload.progress}%</span>
+              <span className="text-sm font-semibold text-primary-ink">{upload.progress}%</span>
             )}
           </div>
           {upload.status !== 'error' && (

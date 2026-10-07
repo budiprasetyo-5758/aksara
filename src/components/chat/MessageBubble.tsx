@@ -1,35 +1,35 @@
 import { useState } from 'react';
-import { ThumbsUp, ThumbsDown, BookOpen, RefreshCw, Copy, Share2, Check, Paperclip, FileText, Eye, Download } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, BookOpen, RefreshCw, Copy, Share2, Check, Paperclip, FileText, Eye, Download, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, SourceReference } from '@/types';
 import aksaraLogo from '@/assets/aksara-logo.png';
-// SourceCard unused, removed
 import { PdfPreviewModal } from './PdfPreviewModal';
-import { useAuth } from '@/contexts/AuthContext';
 
 interface MessageBubbleProps {
   message: Message;
   onRegenerate?: () => void;
+  /** The answer is still streaming in: hide actions until it is complete. */
+  isStreaming?: boolean;
 }
 
-export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
+const actionButton = 'p-1.5 rounded-md transition-colors';
+const actionIdle = 'text-gray-400 hover:text-gray-700 hover:bg-gray-100';
+const actionActive = 'text-primary-ink bg-primary/10';
+
+function AssistantAvatar() {
+  return (
+    <div className="w-7 h-7 rounded-full shrink-0 border border-gray-200 flex items-center justify-center bg-white">
+      <img src={aksaraLogo} alt="" className="w-4.5 h-4.5 object-contain" />
+    </div>
+  );
+}
+
+export function MessageBubble({ message, onRegenerate, isStreaming }: MessageBubbleProps) {
   const [previewSource, setPreviewSource] = useState<SourceReference | null>(null);
   const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(null);
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
-  const { profile } = useAuth();
-
-  const getInitials = (name: string) => {
-    if (!name) return 'U';
-    const parts = name.trim().split(' ').filter(Boolean);
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
-  };
-
-  const initials = getInitials(profile?.full_name || '');
 
   const handleCopy = async () => {
     try {
@@ -57,17 +57,18 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
 
   if (message.isLoading) {
     return (
-      <div className="w-full mb-8">
-        <div className="max-w-3xl mx-auto flex items-start gap-4 px-4">
-          <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-100 flex items-center justify-center bg-white shadow-sm">
-            <img src={aksaraLogo} alt="AKSARA Logo" className="w-5 h-5 object-contain" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-primary mb-1 uppercase tracking-wider">AKSARA</p>
-            <div className="typing-dots flex items-center gap-1">
-              <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-              <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-              <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+      <div className="w-full mb-6">
+        <div className="max-w-3xl mx-auto flex items-start gap-3 px-4">
+          <AssistantAvatar />
+          <div className="flex-1 min-w-0 pt-0.5">
+            <p className="text-sm font-semibold text-gray-900 mb-1.5">AKSARA</p>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <span className="typing-dots flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
+                <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
+                <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
+              </span>
+              Mencari referensi…
             </div>
           </div>
         </div>
@@ -77,25 +78,15 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
 
   if (message.role === 'user') {
     return (
-      <div className="w-full mb-8">
-        <div className="max-w-3xl mx-auto flex items-start justify-end gap-3 px-4">
-          <div className="max-w-[75%] min-w-0">
-            <p className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider text-right">You</p>
-            <div className="bg-primary/10 border border-primary/20 rounded-2xl rounded-tr-sm px-4 py-3 text-gray-800 text-base leading-relaxed break-words">
-              {message.content}
-              {message.attachmentName && (
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-primary/70 bg-primary/5 rounded-lg px-2.5 py-1.5 border border-primary/10">
-                  <Paperclip className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{message.attachmentName}</span>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center shrink-0 text-xs font-bold text-white shadow-sm mt-5 overflow-hidden">
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
-            ) : (
-              initials
+      <div className="w-full mb-6">
+        <div className="max-w-3xl mx-auto flex justify-end px-4">
+          <div className="max-w-[85%] sm:max-w-[75%] min-w-0 bg-primary/10 text-gray-800 rounded-2xl rounded-br-md px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+            {message.content}
+            {message.attachmentName && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-primary-ink bg-white/70 rounded-lg px-2.5 py-1.5 border border-primary/15">
+                <Paperclip className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{message.attachmentName}</span>
+              </div>
             )}
           </div>
         </div>
@@ -105,15 +96,13 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
 
   // Assistant message
   return (
-    <div className="w-full mb-8">
-      <div className="max-w-3xl mx-auto flex items-start gap-4 px-4">
-        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-100 flex items-center justify-center bg-white shadow-sm mt-1">
-          <img src={aksaraLogo} alt="AKSARA Logo" className="w-5 h-5 object-contain" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold text-primary mb-1 uppercase tracking-wider">AKSARA</p>
-          <div className="prose prose-base max-w-none text-gray-800 prose-p:leading-relaxed prose-a:text-primary hover:prose-a:text-primary-dark prose-headings:text-gray-900 prose-strong:text-gray-900 prose-li:my-0 break-words">
-            <ReactMarkdown 
+    <div className="w-full mb-6">
+      <div className="max-w-3xl mx-auto flex items-start gap-3 px-4">
+        <AssistantAvatar />
+        <div className="flex-1 min-w-0 pt-0.5">
+          <p className="text-sm font-semibold text-gray-900 mb-1">AKSARA</p>
+          <div className="prose prose-base max-w-none text-gray-800 prose-p:leading-relaxed prose-a:text-primary-ink prose-a:font-medium prose-headings:text-gray-900 prose-strong:text-gray-900 prose-li:my-0 break-words">
+            <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
                 a: ({ node, ...props }) => {
@@ -126,22 +115,22 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="not-prose mt-4 mb-2 flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white shadow-sm hover:shadow-md transition-all group no-underline"
+                        className="not-prose mt-4 mb-2 flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-white shadow-sm hover:shadow-md transition-all group no-underline"
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0 text-emerald-600">
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 text-primary-ink">
                             <FileText className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-gray-800 truncate m-0">
                               {fileName}
                             </p>
-                            <p className="text-xs text-emerald-600 font-medium mt-0.5 m-0 uppercase tracking-wide">
-                              Dokumen Tersedia
+                            <p className="text-xs text-primary-ink font-medium mt-0.5 m-0">
+                              Dokumen tersedia untuk diunduh
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center justify-center shrink-0 w-8 h-8 rounded-full bg-emerald-600 text-white group-hover:scale-110 transition-transform shadow-sm">
+                        <div className="flex items-center justify-center shrink-0 w-8 h-8 rounded-full bg-primary-dark text-white group-hover:scale-110 transition-transform shadow-sm">
                           <Download className="w-4 h-4" />
                         </div>
                       </a>
@@ -161,50 +150,48 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
 
           {/* Source Citations */}
           {message.sources && message.sources.length > 0 && (
-            <div className="mt-5 pt-4 border-t border-gray-100">
-              <div className="flex items-center gap-1.5 mb-3">
-                <BookOpen className="w-4 h-4 text-emerald-600" />
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Sumber Referensi ({message.sources.length})
+            <div className="mt-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <BookOpen className="w-4 h-4 text-primary" />
+                <p className="text-xs font-semibold text-gray-600">
+                  Sumber referensi ({message.sources.length})
                 </p>
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5">
                 {message.sources.map((source, index) => (
                   <details
                     key={`${source.document_id}-${source.page_number}-${index}`}
-                    className="group border border-gray-200 rounded-lg bg-gray-50 overflow-hidden [&_summary::-webkit-details-marker]:hidden"
+                    className="group border border-gray-200 rounded-xl bg-white overflow-hidden [&_summary::-webkit-details-marker]:hidden"
                   >
-                    <summary className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-100 transition-colors">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileText className="w-4 h-4 text-emerald-500 shrink-0" />
-                        <span className="text-sm font-medium text-gray-700 truncate">
-                          {source.file_name}
-                        </span>
-                        <span className="text-xs text-gray-400 shrink-0 bg-white px-2 py-0.5 rounded-full border border-gray-200">
-                          Hal {source.page_number}
-                        </span>
-                      </div>
-                      <span className="text-xs font-medium text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
-                        Lihat Kutipan ↓
+                    <summary className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer list-none hover:bg-gray-50 transition-colors">
+                      <span className="w-5 h-5 rounded-md bg-primary/10 text-primary-ink text-[11px] font-semibold flex items-center justify-center shrink-0">
+                        {index + 1}
                       </span>
+                      <span className="text-sm font-medium text-gray-700 truncate min-w-0 flex-1">
+                        {source.file_name}
+                      </span>
+                      <span className="text-xs text-gray-500 shrink-0">
+                        Hal. {source.page_number}
+                      </span>
+                      <ChevronDown className="w-4 h-4 text-gray-400 shrink-0 transition-transform group-open:rotate-180" />
                     </summary>
-                    <div className="p-4 pt-2 bg-white border-t border-gray-100 text-sm text-gray-600 leading-relaxed relative">
+                    <div className="px-4 pt-2 pb-3 border-t border-gray-100 bg-gray-50/60 text-sm text-gray-600 leading-relaxed">
                       {source.content ? (
                         <div className="whitespace-pre-wrap">{source.content}</div>
                       ) : (
-                        <em className="text-gray-400">Teks tidak tersedia</em>
+                        <em className="text-gray-400">Teks kutipan tidak tersedia</em>
                       )}
-                      
+
                       {/* Button to open PDF preview modal */}
                       <button
                         onClick={(e) => {
                           e.preventDefault();
                           setPreviewSource(source);
                         }}
-                        className="mt-3 flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors px-3 py-1.5 rounded-md border border-emerald-100"
+                        className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary-ink bg-primary/10 hover:bg-primary/15 transition-colors px-3 py-1.5 rounded-lg"
                       >
                         <Eye className="w-3.5 h-3.5" />
-                        Lihat PDF Asli
+                        Lihat halaman asli
                       </button>
                     </div>
                   </details>
@@ -214,71 +201,58 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-1 mt-3 -ml-1">
-            {/* Like */}
-            <button
-              title="Suka"
-              onClick={() => setFeedback(feedback === 'like' ? null : 'like')}
-              className={`group relative p-1.5 rounded-md transition-colors ${
-                feedback === 'like'
-                  ? 'text-emerald-500 bg-emerald-50'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <ThumbsUp className="w-4 h-4" />
-            </button>
+          {!isStreaming && (
+            <div className="flex items-center gap-0.5 mt-2 -ml-1.5">
+              <button
+                title="Jawaban membantu"
+                aria-label="Jawaban membantu"
+                onClick={() => setFeedback(feedback === 'like' ? null : 'like')}
+                className={`${actionButton} ${feedback === 'like' ? actionActive : actionIdle}`}
+              >
+                <ThumbsUp className="w-4 h-4" />
+              </button>
 
-            {/* Dislike */}
-            <button
-              title="Tidak suka"
-              onClick={() => setFeedback(feedback === 'dislike' ? null : 'dislike')}
-              className={`group relative p-1.5 rounded-md transition-colors ${
-                feedback === 'dislike'
-                  ? 'text-red-500 bg-red-50'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <ThumbsDown className="w-4 h-4" />
-            </button>
+              <button
+                title="Jawaban kurang tepat"
+                aria-label="Jawaban kurang tepat"
+                onClick={() => setFeedback(feedback === 'dislike' ? null : 'dislike')}
+                className={`${actionButton} ${feedback === 'dislike' ? 'text-red-500 bg-red-50' : actionIdle}`}
+              >
+                <ThumbsDown className="w-4 h-4" />
+              </button>
 
-            {/* Divider */}
-            <div className="w-px h-4 bg-gray-200 mx-0.5" />
+              <div className="w-px h-4 bg-gray-200 mx-1" />
 
-            {/* Regenerate */}
-            <button
-              title="Generate ulang"
-              onClick={onRegenerate}
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors rounded-md"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+              {onRegenerate && (
+                <button
+                  title="Buat ulang jawaban"
+                  aria-label="Buat ulang jawaban"
+                  onClick={onRegenerate}
+                  className={`${actionButton} ${actionIdle}`}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              )}
 
-            {/* Copy */}
-            <button
-              title={copied ? 'Tersalin!' : 'Salin jawaban'}
-              onClick={handleCopy}
-              className={`p-1.5 rounded-md transition-colors ${
-                copied
-                  ? 'text-emerald-500 bg-emerald-50'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            </button>
+              <button
+                title={copied ? 'Tersalin!' : 'Salin jawaban'}
+                aria-label="Salin jawaban"
+                onClick={handleCopy}
+                className={`${actionButton} ${copied ? actionActive : actionIdle}`}
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
 
-            {/* Share */}
-            <button
-              title={shared ? 'Link disalin!' : 'Bagikan'}
-              onClick={handleShare}
-              className={`p-1.5 rounded-md transition-colors ${
-                shared
-                  ? 'text-emerald-500 bg-emerald-50'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {shared ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-            </button>
-          </div>
+              <button
+                title={shared ? 'Teks disalin!' : 'Bagikan'}
+                aria-label="Bagikan jawaban"
+                onClick={handleShare}
+                className={`${actionButton} ${shared ? actionActive : actionIdle}`}
+              >
+                {shared ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

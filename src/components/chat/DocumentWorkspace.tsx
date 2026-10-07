@@ -10,6 +10,8 @@ interface DocumentWorkspaceProps {
   sessionTitle?: string;
   activeSessionId?: string | null;
   onRenameSession?: (sessionId: string, newTitle: string) => void;
+  isSending?: boolean;
+  onOpenSidebar?: () => void;
 }
 
 export function DocumentWorkspace({
@@ -20,16 +22,18 @@ export function DocumentWorkspace({
   sessionTitle,
   activeSessionId,
   onRenameSession,
+  isSending,
+  onOpenSidebar,
 }: DocumentWorkspaceProps) {
   return (
-    <div className="flex h-full w-full overflow-hidden">
-      {/* Left: Document Viewer */}
-      <div className="w-1/2 h-full min-w-0 shrink-0">
+    <div className="flex flex-col lg:flex-row h-full w-full overflow-hidden">
+      {/* Document Viewer: top below lg, left on wide screens */}
+      <div className="h-[45%] lg:h-full lg:w-1/2 min-w-0 min-h-0 shrink-0 border-b lg:border-b-0 lg:border-r border-gray-200">
         <DocumentViewer document={document} onClose={onClose} />
       </div>
 
-      {/* Right: Chat Area */}
-      <div className="w-1/2 h-full min-w-0 flex flex-col relative">
+      {/* Chat Area */}
+      <div className="flex-1 lg:w-1/2 min-w-0 min-h-0 flex flex-col relative">
         <ChatArea
           messages={messages}
           onSend={onSend}
@@ -37,6 +41,8 @@ export function DocumentWorkspace({
           activeSessionId={activeSessionId}
           onRenameSession={onRenameSession}
           scopedDocumentName={document.file_name}
+          isSending={isSending}
+          onOpenSidebar={onOpenSidebar}
         />
       </div>
     </div>

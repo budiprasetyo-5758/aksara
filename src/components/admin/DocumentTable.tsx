@@ -12,16 +12,23 @@ import {
   ChevronDown,
   ArrowLeft,
   FileStack,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import type { Document, DocumentStatus, Classification } from '@/types';
 import {
   fetchDocuments,
+  fetchDocumentSummary,
   deleteDocument,
   toggleDocumentStatus,
   syncDocument,
   classifyDocument,
   fetchClassifications,
 } from '@/lib/api';
+import type { DocumentSummaryApiResponse } from '@/lib/api';
+
+const PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 300;
 
 const fileIcons: Record<string, { icon: typeof FileText; bg: string; color: string }> = {
   pdf: { icon: FileText, bg: 'bg-red-50', color: 'text-red-500' },
@@ -30,56 +37,28 @@ const fileIcons: Record<string, { icon: typeof FileText; bg: string; color: stri
 };
 
 const statusConfig: Record<DocumentStatus, { label: string; dot: string; text: string; bg: string }> = {
-  indexed: { label: 'Indexed', dot: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50' },
-  syncing: { label: 'Syncing', dot: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50' },
-  failed: { label: 'Failed', dot: 'bg-red-500', text: 'text-red-700', bg: 'bg-red-50' },
-  pending: { label: 'Pending', dot: 'bg-gray-400', text: 'text-gray-600', bg: 'bg-gray-100' },
+  indexed: { label: 'Terindeks', dot: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50' },
+  syncing: { label: 'Diproses', dot: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50' },
+  failed: { label: 'Gagal', dot: 'bg-red-500', text: 'text-red-700', bg: 'bg-red-50' },
+  pending: { label: 'Menunggu', dot: 'bg-gray-400', text: 'text-gray-600', bg: 'bg-gray-100' },
 };
 
 function formatFileSize(bytes: number): string {
-  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
-  return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes >= 1048576) return `${(bytes / 1048576).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB`;
+  return `${Math.round(bytes / 1024)} KB`;
 }
 
 // ── Card color palette ──────────────────────────────────
+// Same hues as the original cards, one shade deeper so the white text stays readable
 const cardColors = [
-  {
-    gradient: 'from-teal-500 to-teal-600',
-    iconBg: 'bg-white/20',
-    badge: 'bg-white/20 text-white',
-    hoverShadow: 'hover:shadow-teal-200/50',
-  },
-  {
-    gradient: 'from-amber-500 to-orange-500',
-    iconBg: 'bg-white/20',
-    badge: 'bg-white/20 text-white',
-    hoverShadow: 'hover:shadow-amber-200/50',
-  },
-  {
-    gradient: 'from-violet-500 to-purple-600',
-    iconBg: 'bg-white/20',
-    badge: 'bg-white/20 text-white',
-    hoverShadow: 'hover:shadow-violet-200/50',
-  },
-  {
-    gradient: 'from-rose-500 to-pink-600',
-    iconBg: 'bg-white/20',
-    badge: 'bg-white/20 text-white',
-    hoverShadow: 'hover:shadow-rose-200/50',
-  },
-  {
-    gradient: 'from-sky-500 to-blue-600',
-    iconBg: 'bg-white/20',
-    badge: 'bg-white/20 text-white',
-    hoverShadow: 'hover:shadow-sky-200/50',
-  },
-  {
-    gradient: 'from-emerald-500 to-green-600',
-    iconBg: 'bg-white/20',
-    badge: 'bg-white/20 text-white',
-    hoverShadow: 'hover:shadow-emerald-200/50',
-  },
+  { gradient: 'from-teal-600 to-teal-700', hoverShadow: 'hover:shadow-teal-200/50' },
+  { gradient: 'from-amber-600 to-orange-600', hoverShadow: 'hover:shadow-amber-200/50' },
+  { gradient: 'from-violet-600 to-purple-700', hoverShadow: 'hover:shadow-violet-200/50' },
+  { gradient: 'from-rose-600 to-pink-700', hoverShadow: 'hover:shadow-rose-200/50' },
+  { gradient: 'from-sky-600 to-blue-700', hoverShadow: 'hover:shadow-sky-200/50' },
+  { gradient: 'from-emerald-600 to-green-700', hoverShadow: 'hover:shadow-emerald-200/50' },
 ];
+const unclassifiedColors = { gradient: 'from-gray-500 to-gray-600', hoverShadow: 'hover:shadow-gray-200/50' };
 
 // ── Classification Picker (fixed overflow) ──────────────
 function ClassificationPicker({
@@ -113,14 +92,14 @@ function ClassificationPicker({
           setOpen(!open);
         }}
         disabled={disabled}
-        className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all disabled:opacity-50"
+        className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:text-primary-ink hover:border-primary/30 hover:bg-primary/5 transition-all disabled:opacity-50"
         title="Ubah klasifikasi"
       >
         <Tag className="w-3 h-3" />
         <span className="max-w-[80px] truncate">
           {currentId
-            ? classifications.find((c) => c.id === currentId)?.name || 'Unknown'
-            : 'Unset'}
+            ? classifications.find((c) => c.id === currentId)?.name || 'Tidak diketahui'
+            : 'Belum diatur'}
         </span>
         <ChevronDown className="w-3 h-3" />
       </button>
@@ -141,7 +120,7 @@ function ClassificationPicker({
                 setOpen(false);
               }}
               className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                !currentId ? 'text-primary font-medium' : 'text-gray-600'
+                !currentId ? 'text-primary-ink font-medium' : 'text-gray-600'
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-gray-300 shrink-0" />
@@ -156,7 +135,7 @@ function ClassificationPicker({
                   setOpen(false);
                 }}
                 className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                  currentId === c.id ? 'text-primary font-medium' : 'text-gray-600'
+                  currentId === c.id ? 'text-primary-ink font-medium' : 'text-gray-600'
                 }`}
               >
                 <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
@@ -170,13 +149,104 @@ function ClassificationPicker({
   );
 }
 
+// ── Pagination ──────────────────────────────────────────
+/** Page buttons to render: first, last, and current ±1, with gaps collapsed to '…'. */
+function getPageNumbers(current: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+
+  const pages: (number | '…')[] = [1];
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  if (start > 2) pages.push('…');
+  for (let p = start; p <= end; p++) pages.push(p);
+  if (end < total - 1) pages.push('…');
+  pages.push(total);
+  return pages;
+}
+
+function Pagination({
+  page,
+  totalPages,
+  onChange,
+  disabled,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (page: number) => void;
+  disabled: boolean;
+}) {
+  const navButton =
+    'w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors disabled:opacity-40 disabled:hover:bg-transparent';
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onChange(page - 1)}
+        disabled={disabled || page <= 1}
+        className={navButton}
+        title="Halaman sebelumnya"
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+      {getPageNumbers(page, totalPages).map((p, i) =>
+        p === '…' ? (
+          <span key={`gap-${i}`} className="w-8 text-center text-sm text-gray-400">…</span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onChange(p)}
+            disabled={disabled || p === page}
+            className={`min-w-8 h-8 px-2 rounded-lg text-sm font-medium transition-colors ${
+              p === page
+                ? 'bg-primary text-white'
+                : 'text-gray-600 hover:bg-gray-100 disabled:opacity-40'
+            }`}
+          >
+            {p}
+          </button>
+        )
+      )}
+      <button
+        onClick={() => onChange(page + 1)}
+        disabled={disabled || page >= totalPages}
+        className={navButton}
+        title="Halaman berikutnya"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
 // ── Card Group Interface ────────────────────────────────
 interface CardGroup {
   id: string | null;
   name: string;
   description?: string | null;
-  documents: Document[];
+  docCount: number;
+  indexedCount: number;
+  totalPages: number;
   colorIndex: number;
+}
+
+/** Fill the fields the list endpoint doesn't return. */
+function toDocument(d: Document): Document {
+  return {
+    id: d.id,
+    file_name: d.file_name,
+    file_path: '',
+    file_size: d.file_size,
+    file_type: d.file_type,
+    upload_date: d.upload_date,
+    status: d.status as DocumentStatus,
+    is_active: d.is_active,
+    total_pages: d.total_pages,
+    storage_path: '',
+    created_at: d.upload_date,
+    updated_at: d.upload_date,
+    classification_id: d.classification_id || null,
+    classification_name: d.classification_name || null,
+  };
 }
 
 // ── Main Component ──────────────────────────────────────
@@ -185,91 +255,159 @@ interface DocumentTableProps {
 }
 
 export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
-  const [documents, setDocuments] = useState<Document[]>([]);
   const [classifications, setClassifications] = useState<Classification[]>([]);
+  const [summary, setSummary] = useState<DocumentSummaryApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
   const [actionId, setActionId] = useState<string | null>(null);
 
-  // Card view state: null = show cards, string/null id = show detail
+  // Card view state: undefined = show cards, string/null id = show detail
   const [activeGroupId, setActiveGroupId] = useState<string | null | undefined>(undefined);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  // Detail view: one server-side page of the active classification
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [totalDocs, setTotalDocs] = useState(0);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState(''); // debounced, sent to the server
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [docsError, setDocsError] = useState<string | null>(null);
+  const docsRequestRef = useRef(0);
+  const detailTopRef = useRef<HTMLDivElement>(null);
+
+  const loadSummary = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
-      const [docRes, classRes] = await Promise.all([
-        fetchDocuments(),
+      const [summaryRes, classRes] = await Promise.all([
+        fetchDocumentSummary(),
         fetchClassifications(),
       ]);
-      const docs: Document[] = docRes.documents.map((d: any) => ({
-        id: d.id,
-        file_name: d.file_name,
-        file_path: '',
-        file_size: d.file_size,
-        file_type: d.file_type,
-        upload_date: d.upload_date,
-        status: d.status as DocumentStatus,
-        is_active: d.is_active,
-        total_pages: d.total_pages,
-        storage_path: '',
-        created_at: d.upload_date,
-        updated_at: d.upload_date,
-        classification_id: d.classification_id || null,
-        classification_name: d.classification_name || null,
-      }));
-      setDocuments(docs);
+      setSummary(summaryRes);
       setClassifications(classRes);
     } catch (err: any) {
       console.error('Failed to fetch data:', err);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, []);
 
+  const loadDocuments = useCallback(async () => {
+    if (activeGroupId === undefined) return;
+
+    const requestId = ++docsRequestRef.current;
+    setDocsLoading(true);
+    setDocsError(null);
+    try {
+      const res = await fetchDocuments({
+        page,
+        perPage: PAGE_SIZE,
+        classificationId: activeGroupId,
+        search: searchQuery,
+      });
+      // A newer page/search request was issued while this one was in flight
+      if (requestId !== docsRequestRef.current) return;
+
+      // Current page no longer exists (e.g. its last document was deleted)
+      const lastPage = Math.max(1, Math.ceil(res.total / PAGE_SIZE));
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
+
+      setDocuments(res.documents.map(toDocument));
+      setTotalDocs(res.total);
+    } catch (err) {
+      if (requestId !== docsRequestRef.current) return;
+      setDocsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (requestId === docsRequestRef.current) setDocsLoading(false);
+    }
+  }, [activeGroupId, page, searchQuery]);
+
   useEffect(() => {
-    loadData();
-  }, [loadData, refreshTrigger]);
+    loadSummary();
+  }, [loadSummary, refreshTrigger]);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments, refreshTrigger]);
+
+  // Debounce typing, then search from page 1
+  useEffect(() => {
+    const q = searchInput.trim();
+    if (q === searchQuery) return;
+    const timer = setTimeout(() => {
+      setSearchQuery(q);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput, searchQuery]);
 
   // ── Build groups ──────────────────────────────────
-  const buildGroups = (): CardGroup[] => {
-    const groups: CardGroup[] = [];
+  const summaryById = new Map(
+    (summary?.groups ?? []).map((s) => [s.classification_id, s])
+  );
 
-    classifications.forEach((c, index) => {
-      const docs = documents.filter((d) => d.classification_id === c.id);
-      groups.push({
-        id: c.id,
-        name: c.name,
-        description: c.description,
-        documents: docs,
-        colorIndex: index % cardColors.length,
-      });
-    });
-
-    // Unclassified
-    const unclassifiedDocs = documents.filter((d) => !d.classification_id);
-    groups.push({
-      id: null,
-      name: 'Belum Diklasifikasi',
-      description: 'Dokumen yang belum diberi klasifikasi',
-      documents: unclassifiedDocs,
-      colorIndex: -1,
-    });
-
-    return groups;
+  const buildGroup = (
+    id: string | null,
+    name: string,
+    description: string | null,
+    colorIndex: number,
+  ): CardGroup => {
+    const s = summaryById.get(id);
+    return {
+      id,
+      name,
+      description,
+      docCount: s?.document_count ?? 0,
+      indexedCount: s?.indexed_count ?? 0,
+      totalPages: s?.total_pages ?? 0,
+      colorIndex,
+    };
   };
 
-  const groups = buildGroups();
+  const groups: CardGroup[] = [
+    ...classifications.map((c, index) =>
+      buildGroup(c.id, c.name, c.description, index % cardColors.length)
+    ),
+    buildGroup(null, 'Belum Diklasifikasi', 'Dokumen yang belum diberi klasifikasi', -1),
+  ];
+
+  const totalAllDocs = summary?.total_documents ?? 0;
 
   // ── Active group detail ───────────────────────────
   const activeGroup = activeGroupId !== undefined
     ? groups.find((g) => g.id === activeGroupId)
     : null;
 
-  const activeDocuments = activeGroup
-    ? activeGroup.documents.filter((doc) =>
-        doc.file_name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : [];
+  const pageCount = Math.max(1, Math.ceil(totalDocs / PAGE_SIZE));
+  const rangeStart = (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = rangeStart + documents.length - 1;
+
+  const openGroup = (id: string | null) => {
+    setActiveGroupId(id);
+    setPage(1);
+    setSearchInput('');
+    setSearchQuery('');
+    setDocuments([]);
+    setTotalDocs(0);
+    setDocsError(null);
+    setDocsLoading(true);
+  };
+
+  const closeGroup = () => {
+    docsRequestRef.current++; // drop any in-flight page response
+    setActiveGroupId(undefined);
+    setSearchInput('');
+    setSearchQuery('');
+    setPage(1);
+    // Counts may have changed from actions taken inside the group
+    loadSummary(false);
+  };
+
+  const goToPage = (p: number) => {
+    setPage(p);
+    detailTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // ── Actions ───────────────────────────────────────
   const handleToggle = async (id: string) => {
@@ -280,20 +418,21 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
         prev.map((d) => (d.id === id ? { ...d, is_active: result.is_active } : d))
       );
     } catch (err: any) {
-      alert(`Failed to toggle: ${err.message}`);
+      alert(`Gagal mengubah status: ${err.message}`);
     } finally {
       setActionId(null);
     }
   };
 
   const handleDelete = async (id: string, fileName: string) => {
-    if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+    if (!confirm(`Hapus "${fileName}"? Tindakan ini tidak dapat dibatalkan.`)) return;
     setActionId(id);
     try {
       await deleteDocument(id);
-      setDocuments((prev) => prev.filter((d) => d.id !== id));
+      // Refetch so the next document slides into this page
+      await loadDocuments();
     } catch (err: any) {
-      alert(`Failed to delete: ${err.message}`);
+      alert(`Gagal menghapus: ${err.message}`);
     } finally {
       setActionId(null);
     }
@@ -307,7 +446,7 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
         prev.map((d) => (d.id === id ? { ...d, status: 'syncing' as DocumentStatus } : d))
       );
     } catch (err: any) {
-      alert(`Failed to sync: ${err.message}`);
+      alert(`Gagal memproses ulang: ${err.message}`);
     } finally {
       setActionId(null);
     }
@@ -317,18 +456,10 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
     setActionId(docId);
     try {
       await classifyDocument(docId, classificationId);
-      const newName = classificationId
-        ? classifications.find((c) => c.id === classificationId)?.name || null
-        : null;
-      setDocuments((prev) =>
-        prev.map((d) =>
-          d.id === docId
-            ? { ...d, classification_id: classificationId, classification_name: newName }
-            : d
-        )
-      );
+      // A reclassified document leaves this group; refetch to backfill the page
+      await loadDocuments();
     } catch (err: any) {
-      alert(`Failed to classify: ${err.message}`);
+      alert(`Gagal mengubah klasifikasi: ${err.message}`);
     } finally {
       setActionId(null);
     }
@@ -347,33 +478,32 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
   // DETAIL VIEW — Show documents for selected card
   // ═══════════════════════════════════════════════════
   if (activeGroup) {
-    const colors = activeGroup.colorIndex >= 0
-      ? cardColors[activeGroup.colorIndex]
-      : null;
+    const colors = activeGroup.colorIndex >= 0 ? cardColors[activeGroup.colorIndex] : unclassifiedColors;
 
     return (
-      <div className="space-y-4" style={{ animation: 'fadeSlideIn 0.25s ease-out' }}>
+      <div
+        ref={detailTopRef}
+        className="space-y-4 scroll-mt-4"
+        style={{ animation: 'fadeSlideIn 0.25s ease-out' }}
+      >
         {/* Back + Header */}
         <div className="flex items-center gap-4">
           <button
-            onClick={() => {
-              setActiveGroupId(undefined);
-              setSearchQuery('');
-            }}
+            onClick={closeGroup}
             className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all shrink-0"
+            title="Kembali ke daftar klasifikasi"
+            aria-label="Kembali ke daftar klasifikasi"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-3 flex-1">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              colors ? `bg-gradient-to-br ${colors.gradient}` : 'bg-gray-200'
-            }`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br ${colors.gradient}`}>
               <FolderKanban className="w-5 h-5 text-white" />
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-900">{activeGroup.name}</h3>
               {activeGroup.description && (
-                <p className="text-xs text-gray-400">{activeGroup.description}</p>
+                <p className="text-xs text-gray-500">{activeGroup.description}</p>
               )}
             </div>
           </div>
@@ -382,55 +512,71 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search documents..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Cari nama dokumen…"
                 className="pl-9 pr-4 py-1.5 bg-white border border-gray-200 rounded-lg text-sm w-48 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
               />
             </div>
             <button
-              onClick={loadData}
+              onClick={() => {
+                loadDocuments();
+                loadSummary(false);
+              }}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-              title="Refresh"
+              title="Muat ulang"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className={`w-4 h-4 ${docsLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
 
         {/* Documents Table */}
         <div className="bg-white border border-gray-200 rounded-xl overflow-visible">
-          {activeDocuments.length === 0 ? (
-            <div className="text-center py-16 text-sm text-gray-400">
-              {searchQuery ? 'No documents match your search.' : 'No documents in this classification yet.'}
+          {docsError ? (
+            <div className="text-center py-16 text-sm text-red-500">
+              Gagal memuat dokumen: {docsError}{' '}
+              <button onClick={loadDocuments} className="underline hover:text-red-700">
+                Coba lagi
+              </button>
             </div>
+          ) : documents.length === 0 ? (
+            docsLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="text-center py-16 text-sm text-gray-400">
+                {searchQuery ? 'Tidak ada dokumen yang cocok dengan pencarian.' : 'Belum ada dokumen di klasifikasi ini.'}
+              </div>
+            )
           ) : (
             <>
-              <table className="w-full">
+              <table className={`w-full transition-opacity ${docsLoading ? 'opacity-50' : ''}`}>
                 <thead>
                   <tr className="border-b border-gray-100">
-                    <th className="text-left text-[11px] text-gray-400 font-semibold uppercase tracking-wider px-5 py-3">
-                      File Name
+                    <th className="text-left text-[11px] text-gray-500 font-semibold uppercase tracking-wider px-5 py-3">
+                      Nama file
                     </th>
-                    <th className="text-left text-[11px] text-gray-400 font-semibold uppercase tracking-wider px-5 py-3">
-                      Upload Date
+                    <th className="text-left text-[11px] text-gray-500 font-semibold uppercase tracking-wider px-5 py-3">
+                      Tanggal unggah
                     </th>
-                    <th className="text-left text-[11px] text-gray-400 font-semibold uppercase tracking-wider px-5 py-3">
-                      Size
+                    <th className="text-left text-[11px] text-gray-500 font-semibold uppercase tracking-wider px-5 py-3">
+                      Ukuran
                     </th>
-                    <th className="text-left text-[11px] text-gray-400 font-semibold uppercase tracking-wider px-5 py-3">
-                      Pages
+                    <th className="text-left text-[11px] text-gray-500 font-semibold uppercase tracking-wider px-5 py-3">
+                      Halaman
                     </th>
-                    <th className="text-left text-[11px] text-gray-400 font-semibold uppercase tracking-wider px-5 py-3">
+                    <th className="text-left text-[11px] text-gray-500 font-semibold uppercase tracking-wider px-5 py-3">
                       Status
                     </th>
-                    <th className="text-right text-[11px] text-gray-400 font-semibold uppercase tracking-wider px-5 py-3">
-                      Actions
+                    <th className="text-right text-[11px] text-gray-500 font-semibold uppercase tracking-wider px-5 py-3">
+                      Aksi
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {activeDocuments.map((doc) => {
+                  {documents.map((doc) => {
                     const fIcon = fileIcons[doc.file_type] || fileIcons.txt;
                     const Icon = fIcon.icon;
                     const status = statusConfig[doc.status];
@@ -452,7 +598,7 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
                           </div>
                         </td>
                         <td className="px-5 py-3.5 text-sm text-gray-500">
-                          {new Date(doc.upload_date).toLocaleDateString('en-US', {
+                          {new Date(doc.upload_date).toLocaleDateString('id-ID', {
                             year: 'numeric', month: 'short', day: 'numeric',
                           })}
                         </td>
@@ -478,6 +624,8 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
                             />
                             <button
                               onClick={() => handleToggle(doc.id)}
+                              title={doc.is_active ? 'Aktif — klik untuk menonaktifkan' : 'Nonaktif — klik untuk mengaktifkan'}
+                              aria-label={doc.is_active ? 'Nonaktifkan dokumen' : 'Aktifkan dokumen'}
                               disabled={isActioning}
                               className={`relative w-10 h-5 rounded-full transition-colors ${
                                 doc.is_active ? 'bg-primary' : 'bg-gray-300'
@@ -492,8 +640,8 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
                             <button
                               onClick={() => handleSync(doc.id)}
                               disabled={isActioning}
-                              className="p-1.5 text-gray-400 hover:text-primary rounded-md hover:bg-primary/5 transition-colors"
-                              title="Re-sync"
+                              className="p-1.5 text-gray-400 hover:text-primary-ink rounded-md hover:bg-primary/5 transition-colors"
+                              title="Proses ulang"
                             >
                               <RefreshCw className="w-4 h-4" />
                             </button>
@@ -501,7 +649,7 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
                               onClick={() => handleDelete(doc.id, doc.file_name)}
                               disabled={isActioning}
                               className="p-1.5 text-gray-400 hover:text-red-500 rounded-md hover:bg-red-50 transition-colors"
-                              title="Delete"
+                              title="Hapus"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -516,8 +664,16 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
               {/* Footer */}
               <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
                 <p className="text-sm text-gray-500">
-                  {activeDocuments.length} document{activeDocuments.length !== 1 ? 's' : ''}
+                  Menampilkan {rangeStart}–{rangeEnd} dari {totalDocs.toLocaleString('id-ID')} dokumen
                 </p>
+                {pageCount > 1 && (
+                  <Pagination
+                    page={page}
+                    totalPages={pageCount}
+                    onChange={goToPage}
+                    disabled={docsLoading}
+                  />
+                )}
               </div>
             </>
           )}
@@ -544,39 +700,31 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold text-gray-800">Document List</h3>
+        <h3 className="text-base font-bold text-gray-800">Daftar Dokumen</h3>
         <button
-          onClick={loadData}
+          onClick={() => loadSummary()}
           className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-          title="Refresh"
+          title="Muat ulang"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
-      {documents.length === 0 ? (
+      {totalAllDocs === 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl py-16 text-center">
-          <p className="text-sm text-gray-400">No documents uploaded yet.</p>
+          <p className="text-sm text-gray-400">Belum ada dokumen yang diunggah.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {groups.map((group) => {
-            const colors = group.colorIndex >= 0
-              ? cardColors[group.colorIndex]
-              : null;
-            const docCount = group.documents.length;
-            const totalPages = group.documents.reduce((sum, d) => sum + d.total_pages, 0);
-            const indexedCount = group.documents.filter((d) => d.status === 'indexed').length;
+            const colors = group.colorIndex >= 0 ? cardColors[group.colorIndex] : unclassifiedColors;
+            const { docCount, totalPages, indexedCount } = group;
 
             return (
               <button
                 key={group.id ?? '__unclassified'}
-                onClick={() => setActiveGroupId(group.id)}
-                className={`group relative rounded-2xl p-5 text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
-                  colors
-                    ? `bg-gradient-to-br ${colors.gradient} ${colors.hoverShadow}`
-                    : 'bg-gradient-to-br from-gray-400 to-gray-500 hover:shadow-gray-200/50'
-                } overflow-hidden`}
+                onClick={() => openGroup(group.id)}
+                className={`group relative rounded-2xl p-5 text-left overflow-hidden bg-gradient-to-br ${colors.gradient} ${colors.hoverShadow} transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5`}
                 style={{ animation: `cardIn 0.3s ease-out` }}
               >
                 {/* Background decoration */}
@@ -584,9 +732,7 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
                 <div className="absolute -right-2 -bottom-6 w-16 h-16 rounded-full bg-white/5" />
 
                 {/* Icon */}
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 ${
-                  colors ? colors.iconBg : 'bg-white/20'
-                }`}>
+                <div className="relative z-10 w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center mb-4">
                   <FolderKanban className="w-5 h-5 text-white" />
                 </div>
 
@@ -595,22 +741,20 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
                   {group.name}
                 </h4>
                 {group.description && (
-                  <p className="text-xs text-white/70 mb-4 line-clamp-1 relative z-10">
+                  <p className="text-xs text-white/80 mb-4 line-clamp-1 relative z-10">
                     {group.description}
                   </p>
                 )}
 
                 {/* Stats */}
                 <div className="flex items-center gap-3 relative z-10">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                    colors ? colors.badge : 'bg-white/20 text-white'
-                  }`}>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
                     <FileStack className="w-3 h-3" />
-                    {docCount} dokumen
+                    {docCount.toLocaleString('id-ID')} dokumen
                   </span>
                   {totalPages > 0 && (
-                    <span className="text-xs text-white/60">
-                      {totalPages} halaman
+                    <span className="text-xs text-white/75">
+                      {totalPages.toLocaleString('id-ID')} halaman
                     </span>
                   )}
                 </div>
@@ -618,14 +762,14 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
                 {/* Index status bar */}
                 {docCount > 0 && (
                   <div className="mt-4 relative z-10">
-                    <div className="flex items-center justify-between text-[10px] text-white/60 mb-1">
-                      <span>Indexed</span>
+                    <div className="flex items-center justify-between text-[11px] text-white/75 mb-1">
+                      <span>Terindeks</span>
                       <span>{indexedCount}/{docCount}</span>
                     </div>
                     <div className="w-full h-1.5 rounded-full bg-white/20">
                       <div
-                        className="h-1.5 rounded-full bg-white/70 transition-all duration-500"
-                        style={{ width: `${docCount > 0 ? (indexedCount / docCount) * 100 : 0}%` }}
+                        className="h-1.5 rounded-full bg-white/80 transition-all duration-500"
+                        style={{ width: `${(indexedCount / docCount) * 100}%` }}
                       />
                     </div>
                   </div>
@@ -637,10 +781,10 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
       )}
 
       {/* Total footer */}
-      {documents.length > 0 && (
+      {totalAllDocs > 0 && (
         <div className="px-1">
           <p className="text-sm text-gray-500">
-            {documents.length} document{documents.length !== 1 ? 's' : ''} total across {groups.length} classification{groups.length !== 1 ? 's' : ''}
+            Total {totalAllDocs.toLocaleString('id-ID')} dokumen dalam {groups.length} klasifikasi
           </p>
         </div>
       )}

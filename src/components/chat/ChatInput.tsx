@@ -1,16 +1,38 @@
-import { useState, useRef, type FormEvent } from 'react';
-import { Paperclip, Send, X, FileText, ImageIcon } from 'lucide-react';
+import { useState, useRef, useLayoutEffect, type FormEvent } from 'react';
+import { Paperclip, ArrowUp, X, FileText, ImageIcon, Loader2 } from 'lucide-react';
 
 interface ChatInputProps {
   onSend: (message: string, file?: File) => void;
+  /** True while an answer is being generated: typing stays allowed, sending is blocked. */
   disabled?: boolean;
+  placeholder?: string;
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+const MAX_TEXTAREA_HEIGHT = 200;
+
+export function ChatInput({
+  onSend,
+  disabled,
+  placeholder = 'Tanyakan kepada AKSARA…',
+}: ChatInputProps) {
   const [value, setValue] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Grow with the content up to MAX_TEXTAREA_HEIGHT, then scroll inside
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    // Empty: stay one row (scrollHeight would count a wrapping placeholder)
+    if (!value) {
+      el.style.height = '';
+      return;
+    }
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+  }, [value]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -30,6 +52,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    textareaRef.current?.focus();
   };
 
   const handleRemoveFile = () => {
@@ -40,37 +63,50 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     setPreviewUrl(null);
   };
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if ((!value.trim() && !selectedFile) || disabled) return;
+  const canSend = Boolean(value.trim() || selectedFile) && !disabled;
 
+  const submit = () => {
+    if (!canSend) return;
     onSend(value.trim(), selectedFile || undefined);
     setValue('');
     handleRemoveFile();
+  };
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    submit();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter sends, Shift+Enter adds a line; ignore Enter while an IME is composing
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      submit();
+    }
   };
 
   const isPdf = selectedFile?.type === 'application/pdf' || selectedFile?.name.toLowerCase().endsWith('.pdf');
   const isImage = selectedFile?.type.startsWith('image/');
 
   return (
-    <div className="bg-white/80 backdrop-blur-md border border-gray-200 shadow-lg rounded-2xl p-3">
+    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm transition-all focus-within:border-primary/40 focus-within:ring-4 focus-within:ring-primary/10">
       {/* Attachment Preview */}
       {selectedFile && (
-        <div className="mb-2 mx-2 flex items-start gap-2">
-          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 min-w-0 flex-1">
+        <div className="px-3 pt-3">
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 min-w-0">
             {isImage && previewUrl ? (
               <img
                 src={previewUrl}
-                alt="Preview"
-                className="w-12 h-12 rounded-lg object-cover shrink-0"
+                alt="Pratinjau lampiran"
+                className="w-10 h-10 rounded-lg object-cover shrink-0"
               />
             ) : isPdf ? (
-              <div className="w-12 h-12 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
-                <FileText className="w-6 h-6 text-red-500" />
+              <div className="w-10 h-10 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5 text-red-500" />
               </div>
             ) : (
-              <div className="w-12 h-12 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-                <ImageIcon className="w-6 h-6 text-blue-500" />
+              <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+                <ImageIcon className="w-5 h-5 text-blue-500" />
               </div>
             )}
             <div className="min-w-0 flex-1">
@@ -78,14 +114,15 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
               <p className="text-[11px] text-gray-400">
                 {(selectedFile.size / 1024).toFixed(1)} KB
                 {isPdf && ' · PDF'}
-                {isImage && ' · Image'}
+                {isImage && ' · Gambar'}
               </p>
             </div>
             <button
               type="button"
               onClick={handleRemoveFile}
               className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors shrink-0"
-              title="Remove attachment"
+              title="Hapus lampiran"
+              aria-label="Hapus lampiran"
             >
               <X className="w-4 h-4" />
             </button>
@@ -93,7 +130,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="flex items-center gap-3 relative">
+      <form onSubmit={handleSubmit} className="flex items-end gap-2 p-2">
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
@@ -106,34 +143,36 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className={`transition-colors shrink-0 ml-2 ${
+          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors ${
             selectedFile
-              ? 'text-primary'
-              : 'text-gray-400 hover:text-primary'
+              ? 'text-primary-ink bg-primary/10'
+              : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'
           }`}
-          title="Attach image or PDF"
+          title="Lampirkan gambar atau PDF"
+          aria-label="Lampirkan gambar atau PDF"
         >
           <Paperclip className="w-5 h-5" />
         </button>
-        <input
-          type="text"
+        <textarea
+          ref={textareaRef}
+          rows={1}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={selectedFile ? "Add a message about this file..." : "Type your question here..."}
-          disabled={disabled}
-          className="flex-1 bg-transparent border-0 px-2 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-0 transition-all disabled:opacity-50"
+          onKeyDown={handleKeyDown}
+          placeholder={selectedFile ? 'Tambahkan pertanyaan tentang file ini…' : placeholder}
+          className="flex-1 resize-none bg-transparent border-0 px-1 py-1.5 text-[15px] leading-6 text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-0"
+          aria-label="Pesan"
         />
         <button
           type="submit"
-          disabled={(!value.trim() && !selectedFile) || disabled}
-          className="w-10 h-10 rounded-full bg-primary hover:bg-primary-dark text-white flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          disabled={!canSend}
+          className="w-9 h-9 rounded-full bg-primary-dark hover:bg-primary-ink text-white flex items-center justify-center transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed shrink-0"
+          title={disabled ? 'Menunggu jawaban…' : 'Kirim (Enter)'}
+          aria-label="Kirim pesan"
         >
-          <Send className="w-4 h-4" />
+          {disabled ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
         </button>
       </form>
-      <p className="text-center text-[10px] text-gray-400 mt-2 px-4">
-        AKSARA may produce inaccurate information about people, places, or facts. Always verify with internal protocols.
-      </p>
     </div>
   );
 }
