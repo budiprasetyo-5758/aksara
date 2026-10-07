@@ -257,6 +257,7 @@ interface DocumentTableProps {
 export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
   const [classifications, setClassifications] = useState<Classification[]>([]);
   const [summary, setSummary] = useState<DocumentSummaryApiResponse | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
 
@@ -283,8 +284,11 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
       ]);
       setSummary(summaryRes);
       setClassifications(classRes);
+      setSummaryError(null);
     } catch (err: any) {
       console.error('Failed to fetch data:', err);
+      // Without this the cards fall through to "no documents", which hides the real problem
+      setSummaryError(err.message || 'Tidak dapat terhubung ke server.');
     } finally {
       if (showSpinner) setLoading(false);
     }
@@ -710,7 +714,18 @@ export function DocumentTable({ refreshTrigger }: DocumentTableProps) {
         </button>
       </div>
 
-      {totalAllDocs === 0 ? (
+      {summaryError ? (
+        <div className="bg-white border border-red-200 rounded-xl py-12 px-6 text-center" role="alert">
+          <p className="text-sm font-medium text-red-600">Gagal memuat daftar dokumen.</p>
+          <p className="text-xs text-gray-500 mt-1 break-words">{summaryError}</p>
+          <button
+            onClick={() => loadSummary()}
+            className="mt-4 text-sm font-medium text-primary-ink hover:underline"
+          >
+            Coba lagi
+          </button>
+        </div>
+      ) : totalAllDocs === 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl py-16 text-center">
           <p className="text-sm text-gray-400">Belum ada dokumen yang diunggah.</p>
         </div>

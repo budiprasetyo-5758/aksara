@@ -22,6 +22,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   signup_disabled: 'Pendaftaran akun baru sedang dinonaktifkan.',
   over_email_send_rate_limit: 'Terlalu banyak permintaan email. Silakan coba lagi beberapa saat lagi.',
   over_request_rate_limit: 'Terlalu banyak percobaan. Silakan coba lagi beberapa saat lagi.',
+  otp_expired: 'Kode atau tautan salah, sudah dipakai, atau kedaluwarsa. Silakan minta yang baru.',
 };
 
 /** Indonesian message for a Supabase auth error, falling back to its own message. */
@@ -36,6 +37,8 @@ export function authErrorMessage(error: { code?: string; message?: string }): st
 export function getAuthRedirectError(): string | null {
   for (const raw of [window.location.hash.slice(1), window.location.search.slice(1)]) {
     const params = new URLSearchParams(raw);
+    const code = params.get('error_code');
+    if (code && AUTH_ERROR_MESSAGES[code]) return AUTH_ERROR_MESSAGES[code];
     const message = params.get('error_description') || params.get('error');
     if (message) return message;
   }

@@ -32,6 +32,11 @@ export function AuthPage() {
   const [error, setError] = useState<string | null>(getAuthRedirectError);
   const [notice, setNotice] = useState<string | null>(null);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
+  // Supabase emails carry both a link and a one-time code; this enables the code path
+  const [otpContext, setOtpContext] = useState<{ email: string; type: 'signup' | 'recovery' } | null>(null);
+  const [otpCode, setOtpCode] = useState('');
+  // A verified recovery code signs the user in; send them to set a new password, not home
+  const [redirectTo, setRedirectTo] = useState('/');
 
   const navigate = useNavigate();
 
@@ -40,7 +45,7 @@ export function AuthPage() {
   }
 
   if (session) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
   const validateUsername = (value: string): boolean => {
@@ -52,6 +57,8 @@ export function AuthPage() {
     setError(null);
     setNotice(null);
     setUnconfirmedEmail(null);
+    setOtpContext(null);
+    setOtpCode('');
   };
 
   const handleLogin = async () => {
@@ -63,6 +70,7 @@ export function AuthPage() {
     if (error) {
       if (error.code === 'email_not_confirmed') {
         setUnconfirmedEmail(loginEmail);
+        setOtpContext({ email: loginEmail, type: 'signup' });
       }
       throw new Error(authErrorMessage(error));
     }
@@ -114,7 +122,8 @@ export function AuthPage() {
       setMode('login');
       setEmail(signupEmail);
       setPassword('');
-      setNotice(`Pendaftaran berhasil! Kami telah mengirim tautan konfirmasi ke ${signupEmail}. Silakan konfirmasi email Anda sebelum masuk.`);
+      setOtpContext({ email: signupEmail, type: 'signup' });
+      setNotice(`Pendaftaran berhasil! Kami telah mengirim email konfirmasi ke ${signupEmail}. Klik tautan di email tersebut, atau masukkan kodenya di bawah.`);
     }
   };
 
@@ -125,7 +134,8 @@ export function AuthPage() {
     });
     if (error) throw new Error(authErrorMessage(error));
     // Same message whether or not the email exists, so accounts can't be probed
-    setNotice(`Jika ${resetEmail} terdaftar, tautan untuk mengatur ulang kata sandi telah dikirim. Periksa inbox dan folder spam Anda.`);
+    setOtpContext({ email: resetEmail, type: 'recovery' });
+    setNotice(`Jika ${resetEmail} terdaftar, email untuk mengatur ulang kata sandi telah dikirim. Klik tautan di email tersebut, atau masukkan kodenya di bawah. Periksa juga folder spam.`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -134,6 +144,8 @@ export function AuthPage() {
     setError(null);
     setNotice(null);
     setUnconfirmedEmail(null);
+    setOtpContext(null);
+    setOtpCode('');
 
     try {
       if (mode === 'login') await handleLogin();
@@ -161,7 +173,29 @@ export function AuthPage() {
     }
     setError(null);
     setUnconfirmedEmail(null);
-    setNotice(`Tautan konfirmasi baru telah dikirim ke ${unconfirmedEmail}.`);
+    setOtpContext({ email: unconfirmedEmail, type: 'signup' });
+    setOtpCode('');
+    setNotice(`Email konfirmasi baru telah dikirim ke ${unconfirmedEmail}. Klik tautannya, atau masukkan kodenya di bawah.`);
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpContext) return;
+    setLoading(true);
+    setError(null);
+    if (otpContext.type === 'recovery') setRedirectTo('/reset-password');
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: otpContext.email,
+      token: otpCode.trim(),
+      type: otpContext.type,
+    });
+    setLoading(false);
+    // On success the auth listener picks up the new session and this page redirects
+    if (error) {
+      setRedirectTo('/');
+      setError(authErrorMessage(error));
+    }
   };
 
   const handleGoogleSignIn = async () => {
@@ -364,6 +398,43 @@ export function AuthPage() {
           </button>
         </div>
       </form>
+
+      {/* One-time code from the email: for when the link can't be opened on this device */}
+      {otpContext && (
+        <form
+          onSubmit={handleVerifyOtp}
+          className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4"
+        >
+          <label htmlFor="otp-code" className="block text-sm font-medium text-gray-700">
+            {otpContext.type === 'recovery' ? 'Punya kode reset dari email?' : 'Punya kode konfirmasi dari email?'}
+          </label>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Masukkan kode angka dari email yang dikirim ke{' '}
+            <span className="font-medium text-gray-700 break-words">{otpContext.email}</span>.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <input
+              id="otp-code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={10}
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+              className={`${authInputClass} text-center font-semibold tracking-[0.3em]`}
+              placeholder="••••••"
+              aria-label="Kode dari email"
+            />
+            <button
+              type="submit"
+              disabled={busy || otpCode.length < 6}
+              className="shrink-0 px-4 rounded-lg text-sm font-medium text-white bg-primary-dark hover:bg-primary-ink transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verifikasi'}
+            </button>
+          </div>
+        </form>
+      )}
 
       {mode !== 'forgot' && (
         <>
