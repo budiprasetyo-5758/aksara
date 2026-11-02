@@ -1,13 +1,30 @@
 """
 AKSARA RSCM — Document Parser Service
 Uses PyMuPDF (fitz) to extract text blocks from PDFs with page numbers and bounding box metadata.
+DOCX and TXT files are converted to plain text and split the same way.
 """
 
 import fitz  # PyMuPDF
 import base64
+import io
+import zipfile
+from xml.etree import ElementTree
 from models.schemas import ChunkData, BoundingBox
 from config import settings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# WordprocessingML namespace used by DOCX XML tags
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+
+def _text_splitter() -> RecursiveCharacterTextSplitter:
+    """Semantic text splitter shared by all document types."""
+    return RecursiveCharacterTextSplitter(
+        chunk_size=settings.CHUNK_SIZE * 4,  # Approximate chars from token count
+        chunk_overlap=settings.CHUNK_OVERLAP * 4,
+        separators=["\n\n", "\n", ". ", "? ", "! ", " ", ""],
+        keep_separator=True
+    )
 
 
 def parse_pdf(file_bytes: bytes, file_name: str = "Unknown", file_url: str = "") -> list[ChunkData]:
@@ -31,12 +48,7 @@ def parse_pdf(file_bytes: bytes, file_name: str = "Unknown", file_url: str = "")
     chunk_index = 0
 
     # Initialize semantic text splitter
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=settings.CHUNK_SIZE * 4,  # Approximate chars from token count
-        chunk_overlap=settings.CHUNK_OVERLAP * 4,
-        separators=["\n\n", "\n", ". ", "? ", "! ", " ", ""],
-        keep_separator=True
-    )
+    text_splitter = _text_splitter()
 
     for page_num in range(len(doc)):
         page = doc.load_page(page_num)
@@ -84,6 +96,75 @@ def parse_pdf(file_bytes: bytes, file_name: str = "Unknown", file_url: str = "")
             chunk_index += 1
 
     doc.close()
+    return chunks
+
+
+def _docx_paragraph_text(paragraph: ElementTree.Element) -> str:
+    """Join the text runs of a DOCX paragraph, keeping tabs and line breaks."""
+    parts = []
+    for node in paragraph.iter():
+        if node.tag == f"{_W}t":
+            parts.append(node.text or "")
+        elif node.tag == f"{_W}tab":
+            parts.append("\t")
+        elif node.tag in (f"{_W}br", f"{_W}cr"):
+            parts.append("\n")
+    return "".join(parts).strip()
+
+
+def extract_docx_text(file_bytes: bytes) -> str:
+    """
+    Extract plain text from a DOCX file (a ZIP archive of XML parts).
+
+    Paragraphs keep their document order and table rows become "cell | cell" lines.
+    Deleted tracked changes, headers and footers are left out.
+    """
+    with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
+        root = ElementTree.fromstring(archive.read("word/document.xml"))
+
+    body = root.find(f"{_W}body")
+    blocks: list[str] = []
+    for element in (body if body is not None else []):
+        if element.tag == f"{_W}tbl":
+            for row in element.findall(f"{_W}tr"):
+                cells = [
+                    " ".join(filter(None, (_docx_paragraph_text(p) for p in cell.iter(f"{_W}p"))))
+                    for cell in row.findall(f"{_W}tc")
+                ]
+                if any(cells):
+                    blocks.append(" | ".join(cells))
+        else:
+            blocks.extend(_docx_paragraph_text(p) for p in element.iter(f"{_W}p"))
+
+    return "\n".join(block for block in blocks if block)
+
+
+def parse_text(text: str, file_name: str = "Unknown", file_url: str = "") -> list[ChunkData]:
+    """
+    Split plain text (from DOCX or TXT) into chunks.
+
+    These formats have no fixed pages, so every chunk is attributed to page 1.
+    """
+    chunks: list[ChunkData] = []
+    for chunk_text in _text_splitter().split_text(text):
+        chunk_text = chunk_text.strip()
+        if not chunk_text:
+            continue
+
+        chunks.append(
+            ChunkData(
+                text=chunk_text,
+                page_number=1,
+                bbox=BoundingBox(x=0, y=0, width=0, height=0),
+                chunk_index=len(chunks),
+                metadata={
+                    "file_name": file_name,
+                    "page_number": 1,
+                    "file_url": file_url
+                }
+            )
+        )
+
     return chunks
 
 

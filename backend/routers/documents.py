@@ -21,7 +21,7 @@ from models.schemas import (
     StatsResponse,
 )
 from services.supabase_client import get_supabase_client, get_authenticated_client
-from services.parser import parse_pdf, get_total_pages
+from services.parser import parse_pdf, parse_text, extract_docx_text, get_total_pages
 from services.embedder import embed_texts, store_embeddings_in_supabase
 from services.auth_service import require_admin, get_current_user
 
@@ -35,6 +35,11 @@ def _document_storage():
     storage calls would run as `anon`. Access is enforced by the route dependencies.
     """
     return get_supabase_client().storage.from_("documents")
+
+
+def _can_open(doc: dict, user: dict) -> bool:
+    """Inactive (revoked) documents stay hidden from regular users; admins can still review them."""
+    return doc["is_active"] or user.get("role") == "admin"
 
 
 # ── Document Search ────────────────────────────────────
@@ -135,8 +140,8 @@ async def view_document(
     """Proxy a document's PDF from Supabase Storage with iframe-safe headers."""
     client = get_supabase_client()
 
-    doc = client.table("documents").select("storage_path, file_name, file_type").eq("id", doc_id).single().execute()
-    if not doc.data:
+    doc = client.table("documents").select("storage_path, file_name, file_type, is_active").eq("id", doc_id).single().execute()
+    if not doc.data or not _can_open(doc.data, current_user):
         raise HTTPException(status_code=404, detail="Document not found.")
 
     storage_path = doc.data["storage_path"]
@@ -155,7 +160,7 @@ async def view_document(
         headers={
             "Content-Disposition": f'inline; filename="{file_name}"',
             "X-Frame-Options": "SAMEORIGIN",
-            "Cache-Control": "public, max-age=1800",
+            "Cache-Control": "private, max-age=1800",
         },
     )
 
@@ -169,8 +174,8 @@ async def get_page_image(
     """Render a specific page of a PDF document as a JPEG image."""
     client = get_authenticated_client(current_user["access_token"])
 
-    doc = client.table("documents").select("storage_path, file_type").eq("id", doc_id).single().execute()
-    if not doc.data:
+    doc = client.table("documents").select("storage_path, file_type, is_active").eq("id", doc_id).single().execute()
+    if not doc.data or not _can_open(doc.data, current_user):
         raise HTTPException(status_code=404, detail="Document not found.")
 
     if doc.data["file_type"] != "pdf":
@@ -202,7 +207,7 @@ async def get_page_image(
             io.BytesIO(img_bytes),
             media_type="image/jpeg",
             headers={
-                "Cache-Control": "public, max-age=3600",
+                "Cache-Control": "private, max-age=3600",
                 "Content-Disposition": f"inline; filename=page_{page_number}.jpg",
             },
         )
@@ -421,15 +426,12 @@ async def process_document(doc_id: str, file_bytes: bytes, file_ext: str, file_u
         if file_ext == "pdf":
             chunks = parse_pdf(file_bytes, file_name=file_name, file_url=file_url)
         else:
-            text = file_bytes.decode("utf-8", errors="ignore")
-            from models.schemas import ChunkData, BoundingBox
-            chunks = [ChunkData(
-                text=text,
-                page_number=1,
-                bbox=BoundingBox(x=0, y=0, width=0, height=0),
-                chunk_index=0,
-                metadata={"file_name": file_name, "page_number": 1, "file_url": file_url}
-            )]
+            # DOCX is a ZIP of XML, so it must be unpacked; TXT is plain text (BOM stripped)
+            if file_ext == "docx":
+                text = extract_docx_text(file_bytes)
+            else:
+                text = file_bytes.decode("utf-8-sig", errors="ignore")
+            chunks = parse_text(text, file_name=file_name, file_url=file_url)
 
         total_pages = max((c.page_number for c in chunks), default=0) if chunks else 0
         if total_pages > 0:

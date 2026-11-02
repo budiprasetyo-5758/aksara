@@ -20,6 +20,13 @@ export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // DOCX/TXT have no fixed pages to render — the quoted snippet below is the preview
+    if (!source.file_name.toLowerCase().endsWith('.pdf')) {
+      setError('Pratinjau halaman hanya tersedia untuk dokumen PDF.');
+      setLoading(false);
+      return;
+    }
+
     // Fetch page image from backend
     const fetchImage = async () => {
       setLoading(true);
@@ -36,6 +43,9 @@ export function PdfPreviewModal({ source, onClose }: PdfPreviewModalProps) {
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
             throw new Error(`Sesi Anda berakhir. Silakan masuk kembali.`);
+          }
+          if (response.status === 404) {
+            throw new Error('Dokumen ini sudah tidak tersedia (dihapus atau dinonaktifkan).');
           }
           throw new Error(`Gagal memuat halaman (${response.status})`);
         }
