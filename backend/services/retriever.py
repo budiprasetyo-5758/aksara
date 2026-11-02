@@ -8,11 +8,40 @@ Performance: All network I/O is async to avoid blocking the event loop.
 """
 
 import asyncio
+import re
 import httpx
 from services.supabase_client import get_supabase_client
 from services.embedder import embed_query_async
 from models.schemas import SourceReference, BoundingBox
 from config import settings
+
+
+# ── Small Talk Detection ───────────────────────────────
+
+# Greetings, thanks and acknowledgements that need no document lookup.
+# A message counts as small talk only if it consists entirely of these phrases.
+_SMALL_TALK_PHRASES = [
+    r"ha+i+", r"ha+y+", r"hi+", r"he+y+", r"hei", r"hal+o+", r"hel+o+",
+    r"(?:selamat|met) (?:pagi|siang|sore|malam)", r"pagi", r"siang", r"sore", r"malam",
+    r"as?salamu ?alaikum", r"waalaikum ?salam", r"wr", r"wb", r"warahmatullahi", r"wabarakatuh",
+    r"permisi", r"apa kabar(?:nya)?", r"gimana kabar(?:nya)?",
+    r"siapa (?:kamu|anda)", r"(?:kamu|anda) siapa",
+    r"terima ?kasih(?: banyak)?", r"makasi+h?(?: banyak)?", r"thanks?(?: you)?", r"thx", r"tq", r"trims",
+    r"sama sama", r"ok+", r"oke+y?", r"okay", r"siap", r"sip+", r"baik(?:lah)?", r"mantap", r"noted",
+    r"ya+", r"iya+", r"bye", r"dada+h?", r"sampai jumpa", r"tes", r"test",
+    r"aksara", r"kak", r"min", r"admin", r"bot", r"dok", r"pak", r"bu", r"mas", r"mbak", r"semua(?:nya)?",
+]
+_SMALL_TALK_RE = re.compile(r"^(?:(?:" + "|".join(_SMALL_TALK_PHRASES) + r")\b ?)+$")
+
+
+def is_small_talk(query: str) -> bool:
+    """Return True if the message is only a greeting/thanks (no document lookup needed)."""
+    text = query.lower().replace("'", "").replace("’", "")
+    text = re.sub(r"[^a-z0-9]+", " ", text).strip()
+    if len(text) > 60:
+        return False
+    # Empty after normalization = emoji/punctuation only
+    return not text or bool(_SMALL_TALK_RE.match(text))
 
 
 # ── Query Rewriting ────────────────────────────────────
@@ -195,6 +224,11 @@ async def retrieve_and_rerank(query: str, document_id: str | None = None) -> tup
     Returns:
         Tuple of (reranked_chunks, source_references).
     """
+    # Greetings/thanks don't need documents — skip the pipeline so no sources are shown
+    if is_small_talk(query):
+        print(f"[Retriever] Small talk detected, skipping retrieval: '{query[:50]}'")
+        return [], []
+
     # Step 0: Rewrite/expand the query for better retrieval
     rewritten_query = await rewrite_query(query)
 
