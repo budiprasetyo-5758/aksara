@@ -28,6 +28,15 @@ from services.auth_service import require_admin, get_current_user
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
 
+def _document_storage():
+    """Documents bucket via the service key.
+
+    get_authenticated_client() only forwards the user's JWT to PostgREST, so its
+    storage calls would run as `anon`. Access is enforced by the route dependencies.
+    """
+    return get_supabase_client().storage.from_("documents")
+
+
 # ── Document Search ────────────────────────────────────
 @router.get("/search", response_model=list[DocumentSearchResult])
 async def search_documents(
@@ -169,7 +178,7 @@ async def get_page_image(
 
     storage_path = doc.data["storage_path"]
     try:
-        file_bytes = client.storage.from_("documents").download(storage_path)
+        file_bytes = _document_storage().download(storage_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to download document: {str(e)}")
 
@@ -359,7 +368,7 @@ async def upload_document(
 
     # Upload to Supabase Storage
     storage_path = f"uploads/{uuid.uuid4()}/{file.filename}"
-    client.storage.from_("documents").upload(storage_path, file_bytes)
+    _document_storage().upload(storage_path, file_bytes)
 
     # Get page count for PDFs
     total_pages = 0
@@ -367,7 +376,7 @@ async def upload_document(
         total_pages = get_total_pages(file_bytes)
 
     # Get public URL
-    file_url = client.storage.from_("documents").get_public_url(storage_path)
+    file_url = _document_storage().get_public_url(storage_path)
 
     # Insert document metadata
     doc_data = {
@@ -473,8 +482,8 @@ async def sync_document(
     client.table("document_chunks").delete().eq("document_id", doc_id).execute()
 
     storage_path = doc.data["storage_path"]
-    file_bytes = client.storage.from_("documents").download(storage_path)
-    file_url = client.storage.from_("documents").get_public_url(storage_path)
+    file_bytes = _document_storage().download(storage_path)
+    file_url = _document_storage().get_public_url(storage_path)
 
     background_tasks.add_task(process_document, doc_id, file_bytes, doc.data["file_type"], file_url)
 
@@ -520,7 +529,7 @@ async def delete_document(
 
     if doc.data.get("storage_path"):
         try:
-            client.storage.from_("documents").remove([doc.data["storage_path"]])
+            _document_storage().remove([doc.data["storage_path"]])
         except Exception:
             pass
 

@@ -13,7 +13,7 @@ Performance:
 import asyncio
 import base64
 import fitz  # PyMuPDF
-from fastapi import APIRouter, Depends, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, UploadFile, File, Form, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from models.schemas import ChatRequest, ChatResponse
@@ -23,6 +23,22 @@ from services.auth_service import get_current_user
 from services.supabase_client import get_supabase_client
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
+
+
+async def verify_session_owner(session_id: str, user_id: str) -> None:
+    """Reject a session that doesn't belong to the user (the backend client bypasses RLS)."""
+    client = get_supabase_client()
+    result = await asyncio.to_thread(
+        lambda: (
+            client.table("chat_sessions")
+            .select("id")
+            .eq("id", session_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Session not found.")
 
 
 async def get_chat_history(session_id: str, limit: int = 6) -> list[dict]:
@@ -127,6 +143,8 @@ async def chat(
     6. Persist user and assistant messages to chat_messages table (background).
     """
     query = request.message
+    if request.session_id:
+        await verify_session_owner(request.session_id, current_user["id"])
 
     # Step 1-3: Retrieve/rerank + fetch history CONCURRENTLY (P4 optimization)
     async def _empty_history():
@@ -182,6 +200,8 @@ async def chat_stream(
     """
     import json
     query = request.message
+    if request.session_id:
+        await verify_session_owner(request.session_id, current_user["id"])
 
     # Retrieve/rerank + fetch history concurrently
     async def _empty_history():
@@ -245,6 +265,9 @@ async def chat_multimodal(
     - PDF (.pdf) → Extract text with PyMuPDF → inject into LLM prompt context
     - Image (.png, .jpg, .jpeg) → Encode to base64 → send to OpenRouter Vision model
     """
+    if session_id:
+        await verify_session_owner(session_id, current_user["id"])
+
     query = message.strip() or "Jelaskan isi file ini."
     file_bytes = await file.read()
     file_name = file.filename or "attachment"
